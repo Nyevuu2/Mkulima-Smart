@@ -1,23 +1,47 @@
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
-# PostgreSQL connection string format: postgresql://user:password@host:port/db_name
-DATABASE_URL = "postgresql://mkulima_admin:mkulima_pass123@localhost:5432/mkulima_db"
+DB_PARAMS = {
+    "dbname": "mkulima_smart",
+    "user": "postgres",
+    "password": "yourpassword",  # <-- Change this to your real Postgres password
+    "host": "localhost",
+    "port": "5432"
+}
 
-# The engine handles the actual connection to the PostgreSQL database
-engine = create_engine(DATABASE_URL)
+def get_db_connection():
+    # RealDictCursor makes queries return rows as dictionaries: {'id': 1, 'full_name': 'John'}
+    return psycopg2.connect(**DB_PARAMS, cursor_factory=RealDictCursor)
 
-# Each instance of SessionLocal will be a database session
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Base class which our database models (tables) will inherit from
-Base = declarative_base()
-
-# Dependency tool to yield database sessions to API endpoints
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+def create_tables():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    # Create Users Table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            full_name VARCHAR(100) NOT NULL,
+            phone VARCHAR(20) UNIQUE NOT NULL,
+            county VARCHAR(50) NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    
+    # Create Expenses Table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS expenses (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            description VARCHAR(255) NOT NULL,
+            category VARCHAR(50) NOT NULL,
+            amount NUMERIC(12, 2) NOT NULL,
+            date DATE NOT NULL
+        );
+    """)
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("🚀 PostgreSQL tables verified/created successfully!")
