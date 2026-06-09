@@ -20,9 +20,9 @@ import AdminDashboard from "./pages/AdminDashboard";
 // DESIGN TOKENS — single source of truth for ALL pages
 // ============================================================================
 export const T = {
-  bg:           "#f5f2eb",   // warm beige — page background
+  bg:           "#f0f4f1",   // light sage — page background
   surface:      "#ffffff",   // white — default card background
-  surfaceAlt:   "#ede9df",   // beige — nested inputs / rows
+  surfaceAlt:   "#1e1d1d",   // beige — nested inputs / rows
   surfaceGreen: "#1e5c2a",   // dark field green — weather, nature sections
   surfaceGreenLight: "#eaf4ec", // pale green tint — sales / income sections
   surfaceAmber: "#fff7e6",   // pale amber — expense / cost sections
@@ -39,6 +39,7 @@ export const T = {
   amberLight:   "#ffa500",   // brighter amber for text on pale amber bg
   red:          "#c0392b",
   navHeight:    "72px",
+  navWidth:     "220px",
   headerHeight: "60px",
 };
 
@@ -131,7 +132,7 @@ export function Chip({ label, color, bg }) {
 // ============================================================================
 // API BASE URL — reads from Vite env, falls back to localhost for development
 // ============================================================================
-const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+export const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const ML_BASE = import.meta.env.VITE_ML_API_URL || "http://127.0.0.1:8001";
 
 // ============================================================================
@@ -155,21 +156,27 @@ export default function App() {
   const [refreshTick, setRefreshTick] = useState(0);
 
   // ── RESTORE SESSION ON MOUNT ─────────────────────────────────────────────
-  // If user refreshes the page, pull auth state back from localStorage
+  // Only restore a session if BOTH a user record AND a token exist in storage.
+  // This prevents a leftover mkulima_user entry (e.g. from a previous test run
+  // where the token was already cleared) from bypassing the landing/login flow.
   useEffect(() => {
-    const storedUser = localStorage.getItem("mkulima_user");
-    if (storedUser) {
+    const storedUser  = localStorage.getItem("mkulima_user");
+    const storedToken = localStorage.getItem("mkulima_token");
+
+    if (storedUser && storedToken) {
       try {
         const parsed = JSON.parse(storedUser);
         setUser(parsed);
         if (parsed?.county) setCounty(parsed.county);
-        setViewMode("app");
+        // Restore to admin dashboard or the main app — never to the website/landing
+        setViewMode(parsed?.role === "admin" ? "admin" : "app");
       } catch {
-        // Corrupted storage — clear and send to login
+        // Corrupted storage — clear everything and show landing
         localStorage.removeItem("mkulima_user");
         localStorage.removeItem("mkulima_token");
       }
     }
+    // No stored session → viewMode stays "website" (landing page)
   }, []);
 
   // ── COORDINATED DATA FETCH (ML + WEATHER ADVICE) ─────────────────────────
@@ -188,7 +195,6 @@ export default function App() {
       try {
         // 1. Machine Learning Prediction Endpoint
         const resML = await fetch(
-          `${API_BASE}/api/predictions?crop=${cropParam}&county=${targetCounty}`
           `${ML_BASE}/api/predictions?crop=${cropParam}&county=${targetCounty}`
         );
         if (resML.ok) {
@@ -231,7 +237,7 @@ export default function App() {
     setIntelligenceData(null);
     localStorage.removeItem("mkulima_user");
     localStorage.removeItem("mkulima_token");
-    setViewMode("login");
+    setViewMode("website");
     setCurrentTab("dashboard");
     setShowUserMenu(false);
   };
@@ -324,41 +330,142 @@ export default function App() {
 
   return (
     <div style={{
-      display: "flex", flexDirection: "column",
+      display: "flex", flexDirection: "row",
       minHeight: "100vh", height: "100dvh",
       background: T.bg, color: T.text,
       fontFamily: "system-ui, -apple-system, sans-serif",
       position: "relative",
     }}>
 
-      {/* ── TOP HEADER ────────────────────────────────────────────────── */}
-      <header style={{
-        height: T.headerHeight,
-        background: T.surface,
-        borderBottom: `1px solid ${T.border}`,
-        display: "flex", alignItems: "center",
-        justifyContent: "space-between",
-        padding: "0 16px",
-        position: "sticky", top: 0, zIndex: 40,
+      {/* ── LEFT SIDEBAR NAVIGATION ───────────────────────────────────── */}
+      <nav style={{
+        width: T.navWidth,
         flexShrink: 0,
+        background: "#1a4a24",
+        borderRight: "none",
+        display: "flex",
+        flexDirection: "column",
+        position: "sticky",
+        top: 0,
+        height: "100dvh",
+        zIndex: 40,
+        overflowY: "auto",
       }}>
-        {/* Left: Logo + Page Title */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: T.accent, flexShrink: 0 }} />
-          <span style={{ fontWeight: 900, fontSize: "15px", color: T.textBright, letterSpacing: "0.03em" }}>
-            MkulimaSmart
-          </span>
-          {pageTitle && (
-            <>
-              <span style={{ color: T.border, fontSize: "16px" }}>·</span>
-              <span style={{ fontSize: "14px", color: T.textDim, fontWeight: 600 }}>{pageTitle}</span>
-            </>
-          )}
+        {/* Logo */}
+        <div style={{
+          height: T.headerHeight,
+          display: "flex", alignItems: "center", gap: "11px",
+          padding: "0 18px",
+          borderBottom: "1px solid rgba(255,255,255,0.12)",
+          flexShrink: 0,
+          background: "#163d1e",
+        }}>
+          {/* Leaf icon mark */}
+          <div style={{
+            width: "34px", height: "34px", borderRadius: "10px",
+            background: "linear-gradient(135deg, #4caf72 0%, #1a7a38 100%)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2C6.5 2 3 7 3 12c0 3.5 2 6.5 5 8l1-3c-1.5-1-2.5-2.8-2.5-5 0-3.6 2.5-7 5.5-7s5.5 3.4 5.5 7c0 2.2-1 4-2.5 5l1 3c3-1.5 5-4.5 5-8 0-5-3.5-10-9-10z" fill="white" opacity="0.9"/>
+              <path d="M12 22V12M12 12L8 16M12 12L16 16" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontWeight: 900, fontSize: "14px", color: "#ffffff", letterSpacing: "0.04em", lineHeight: 1.1 }}>
+              Mkulima<span style={{ color: "#7ed99a" }}>Smart</span>
+            </div>
+            <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.45)", fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              Farm Intelligence
+            </div>
+          </div>
         </div>
 
-        {/* Right: Crop Switcher + User */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          {/* Crop view switcher — syncs cropView for dashboard & market intelligence */}
+        {/* Nav items */}
+        <div style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: "4px" }}>
+          {navigationRoutes.map((route) => {
+            const Icon = route.icon;
+            const isActive = currentTab === route.id;
+            return (
+              <button
+                key={route.id}
+                onClick={() => setCurrentTab(route.id)}
+                style={{
+                  display: "flex", alignItems: "center", gap: "12px",
+                  padding: "11px 14px",
+                  borderRadius: "10px",
+                  background: isActive ? "rgba(255,255,255,0.15)" : "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: isActive ? "#ffffff" : "rgba(255,255,255,0.55)",
+                  fontSize: "14px",
+                  fontWeight: isActive ? 700 : 400,
+                  textAlign: "left",
+                  width: "100%",
+                  transition: "all 0.15s",
+                }}>
+                <Icon size={18} strokeWidth={isActive ? 2.2 : 1.6} />
+                <span style={{ letterSpacing: "0.01em" }}>{route.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Bottom: User */}
+        <div style={{ padding: "12px", borderTop: "1px solid rgba(255,255,255,0.1)", display: "flex", flexDirection: "column", gap: "8px" }}>
+          {/* User row */}
+          <button
+            onClick={() => setShowUserMenu(v => !v)}
+            style={{
+              display: "flex", alignItems: "center", gap: "10px",
+              padding: "10px 12px",
+              borderRadius: "10px",
+              background: "rgba(255,255,255,0.1)",
+              border: "1px solid rgba(255,255,255,0.15)",
+              cursor: "pointer",
+              width: "100%",
+            }}>
+            <div style={{
+              width: "32px", height: "32px", borderRadius: "50%",
+              background: "rgba(255,255,255,0.2)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              <User size={15} color="#ffffff" />
+            </div>
+            <div style={{ textAlign: "left", overflow: "hidden" }}>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {user?.full_name || "Farmer"}
+              </div>
+              <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.55)" }}>{county}</div>
+            </div>
+          </button>
+        </div>
+      </nav>
+
+      {/* ── RIGHT CONTENT AREA ────────────────────────────────────────── */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+
+        {/* Top header strip — page title + crop switcher */}
+        <header style={{
+          height: T.headerHeight,
+          background: "#ffffff",
+          borderBottom: "1px solid #e2ebe4",
+          display: "flex", alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 24px",
+          position: "sticky", top: 0, zIndex: 30,
+          flexShrink: 0,
+        }}>
+          {pageTitle && (
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ width: "4px", height: "20px", borderRadius: "3px", background: "#1a4a24" }} />
+              <span style={{ fontSize: "16px", fontWeight: 800, color: "#111a0e", letterSpacing: "-0.01em" }}>{pageTitle}</span>
+            </div>
+          )}
+          {/* Crop view switcher */}
           <div style={{ display: "flex", background: T.surfaceAlt, border: `1px solid ${T.border}`, borderRadius: "10px", overflow: "hidden" }}>
             {[
               { val: "Maize",       emoji: "🌽", short: isEng ? "Maize"  : "Mahindi" },
@@ -370,7 +477,6 @@ export default function App() {
                 <button key={opt.val}
                   onClick={() => {
                     setCropView(opt.val);
-                    // Keep single-crop pages in sync; "Both" stays as last single crop
                     if (opt.val !== "Both") setCrop(opt.val);
                   }}
                   style={{
@@ -387,20 +493,18 @@ export default function App() {
               );
             })}
           </div>
+        </header>
 
-          {/* User avatar */}
-          <button
-            onClick={() => setShowUserMenu(v => !v)}
-            style={{
-              width: "36px", height: "36px", borderRadius: "50%",
-              background: `${T.accent}20`, border: `1px solid ${T.accent}40`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", position: "relative",
-            }}>
-            <User size={16} color={T.accent} />
-          </button>
-        </div>
-      </header>
+        {/* ── PAGE CONTENT ──────────────────────────────────────────────── */}
+        <main style={{
+          flex: 1,
+          overflowY: "auto",
+          background: "#f0f4f1",
+        }}>
+          {renderPage()}
+        </main>
+
+      </div>
 
       {/* User dropdown menu */}
       {showUserMenu && (
@@ -408,7 +512,7 @@ export default function App() {
           <div onClick={() => setShowUserMenu(false)}
             style={{ position: "fixed", inset: 0, zIndex: 49 }} />
           <div style={{
-            position: "fixed", top: "68px", right: "12px",
+            position: "fixed", bottom: "80px", left: `calc(${T.navWidth} - 10px)`,
             background: T.surface, border: `1px solid ${T.borderBright}`,
             borderRadius: "14px", padding: "8px", zIndex: 50,
             boxShadow: "0 16px 40px rgba(0,0,0,0.12)",
@@ -449,61 +553,6 @@ export default function App() {
           </div>
         </>
       )}
-
-      {/* ── PAGE CONTENT ──────────────────────────────────────────────── */}
-      <main style={{
-        flex: 1,
-        overflowY: "auto",
-        background: T.bg,
-        paddingBottom: `calc(${T.navHeight} + 8px)`,
-      }}>
-        {renderPage()}
-      </main>
-
-      {/* ── BOTTOM NAVIGATION BAR ─────────────────────────────────────── */}
-      <nav style={{
-        position: "fixed", bottom: 0, left: 0, right: 0,
-        height: T.navHeight,
-        background: T.surface,
-        borderTop: `1px solid ${T.border}`,
-        display: "flex", alignItems: "center",
-        zIndex: 40,
-        paddingBottom: "env(safe-area-inset-bottom, 0px)",
-      }}>
-        {navigationRoutes.map((route) => {
-          const Icon = route.icon;
-          const isActive = currentTab === route.id;
-          return (
-            <button
-              key={route.id}
-              onClick={() => setCurrentTab(route.id)}
-              style={{
-                flex: 1,
-                display: "flex", flexDirection: "column",
-                alignItems: "center", justifyContent: "center",
-                gap: "4px", height: "100%",
-                background: "transparent", border: "none",
-                cursor: "pointer",
-                color: isActive ? T.accent : T.textDim,
-                position: "relative",
-                transition: "color 0.15s",
-                padding: "0",
-              }}>
-              {isActive && (
-                <div style={{
-                  position: "absolute", top: "6px",
-                  width: "20px", height: "3px",
-                  background: T.accent, borderRadius: "2px",
-                }} />
-              )}
-              <Icon size={22} strokeWidth={isActive ? 2.5 : 1.8} />
-              <span style={{ fontSize: "10px", fontWeight: isActive ? 800 : 500, letterSpacing: "0.02em" }}>
-                {route.label}
-              </span>
-            </button>
-          );
-        })}
-      </nav>
 
     </div>
   );

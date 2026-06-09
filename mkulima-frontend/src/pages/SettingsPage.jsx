@@ -11,6 +11,8 @@ export default function SettingsPage({
   crop, setCrop,
   language, setLanguage,
   onGoToProfile,
+  onChangePassword,
+  onDeleteAccount,
   onLogout,
 }) {
   const isEng = language === "English";
@@ -134,7 +136,7 @@ export default function SettingsPage({
         textAlign: "left",
         transition: "background 0.15s",
       }}
-      onMouseEnter={e => e.currentTarget.style.background = T.surfaceAlt}
+      onMouseEnter={e => e.currentTarget.style.background = "#f3f4f2"}
       onMouseLeave={e => e.currentTarget.style.background = "transparent"}
     >
       <div style={{ background: danger ? `${T.red}15` : `${iconColor}15`, padding: "9px", borderRadius: "8px", flexShrink: 0 }}>
@@ -174,7 +176,7 @@ export default function SettingsPage({
             {["English", "Swahili"].map((lang) => (
               <button key={lang}
                 onClick={() => setLanguage(lang)}
-                style={{ padding: "11px", borderRadius: "8px", border: language === lang ? `2px solid ${T.accent}` : `1px solid ${T.border}`, background: language === lang ? `${T.accent}08` : T.surfaceAlt, color: T.textBright, fontSize: "14px", fontWeight: language === lang ? 700 : 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+                style={{ padding: "11px", borderRadius: "8px", border: language === lang ? `2px solid ${T.accent}` : `1px solid ${T.border}`, background: language === lang ? `${T.accent}18` : "#f3f4f2", color: T.textBright, fontSize: "14px", fontWeight: language === lang ? 700 : 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
                 {lang === "English" ? "English" : "Kiswahili"} {language === lang && <CheckCircle2 size={14} color={T.accent} />}
               </button>
             ))}
@@ -193,7 +195,7 @@ export default function SettingsPage({
             </div>
           </div>
           <select value={county} onChange={(e) => setCounty(e.target.value)}
-            style={{ width: "100%", background: "#070a0e", border: `1px solid ${T.borderBright}`, borderRadius: "8px", padding: "11px 14px", fontSize: "14px", color: T.textBright, fontWeight: 600, outline: "none", cursor: "pointer", marginBottom: "20px" }}>
+            style={{ width: "100%", background: "#f3f4f2", border: `1px solid ${T.borderBright}`, borderRadius: "8px", padding: "11px 14px", fontSize: "14px", color: T.textBright, fontWeight: 600, outline: "none", cursor: "pointer", marginBottom: "20px" }}>
             <option value="Machakos">Machakos County</option>
             <option value="Makueni">Makueni County</option>
             <option value="Kitui">Kitui County</option>
@@ -219,7 +221,7 @@ export default function SettingsPage({
                 : (isEng ? "Green Grams (Ndengu)" : "Ndengu");
               return (
                 <button key={c} onClick={() => setCrop(c)}
-                  style={{ padding: "11px", borderRadius: "8px", border: active ? `2px solid ${T.amber}` : `1px solid ${T.border}`, background: active ? `${T.amber}08` : T.surfaceAlt, color: T.textBright, fontSize: "14px", fontWeight: active ? 700 : 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+                  style={{ padding: "11px", borderRadius: "8px", border: active ? `2px solid ${T.amber}` : `1px solid ${T.border}`, background: active ? `${T.amber}18` : "#f3f4f2", color: T.textBright, fontSize: "14px", fontWeight: active ? 700 : 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
                   {label} {active && <CheckCircle2 size={14} color={T.amber} />}
                 </button>
               );
@@ -245,7 +247,7 @@ export default function SettingsPage({
                   setFontSize(size);
                   document.documentElement.style.fontSize = fontSizeMap[size];
                 }}
-                style={{ flex: 1, padding: "10px", borderRadius: "8px", border: fontSize === size ? `2px solid #a855f7` : `1px solid ${T.border}`, background: fontSize === size ? `#a855f710` : T.surfaceAlt, color: T.textBright, fontSize: size === "small" ? "12px" : size === "medium" ? "14px" : "17px", fontWeight: fontSize === size ? 700 : 500, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "10px", borderRadius: "8px", border: fontSize === size ? `2px solid #a855f7` : `1px solid ${T.border}`, background: fontSize === size ? `#a855f725` : "#f3f4f2", color: T.textBright, fontSize: size === "small" ? "12px" : size === "medium" ? "14px" : "17px", fontWeight: fontSize === size ? 700 : 500, cursor: "pointer" }}>
                 {fontSizeLabel[size]}
               </button>
             ))}
@@ -264,6 +266,9 @@ export default function SettingsPage({
             <div style={{ fontSize: "13px", color: T.textDim, marginTop: "2px" }}>{txt.notifSub}</div>
           </div>
           <button
+            role="switch"
+            aria-checked={notificationsOn}
+            aria-label={txt.notifTitle}
             onClick={() => setNotificationsOn(v => !v)}
             style={{ width: "48px", height: "26px", borderRadius: "13px", background: notificationsOn ? T.accent : T.border, border: "none", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}
           >
@@ -278,7 +283,7 @@ export default function SettingsPage({
       <Card style={{ overflow: "hidden" }}>
         <RowButton icon={User} iconColor={T.blue} title={txt.editProfile} sub={txt.editProfileSub} onClick={onGoToProfile} />
         <div style={{ height: "1px", background: T.border, margin: "0 16px" }} />
-        <RowButton icon={Lock} iconColor={T.amber} title={txt.changePassword} sub={txt.changePasswordSub} onClick={onGoToProfile} />
+        <RowButton icon={Lock} iconColor={T.amber} title={txt.changePassword} sub={txt.changePasswordSub} onClick={onChangePassword || onGoToProfile} />
         <div style={{ height: "1px", background: T.border, margin: "0 16px" }} />
         <RowButton icon={LogOut} iconColor={T.textDim} title={txt.logout} sub={txt.logoutSub} onClick={onLogout} />
         <div style={{ height: "1px", background: T.border, margin: "0 16px" }} />
@@ -289,10 +294,11 @@ export default function SettingsPage({
             <p style={{ color: T.red, fontSize: "14px", fontWeight: 600, margin: 0 }}>{txt.deleteConfirm}</p>
             <div style={{ display: "flex", gap: "10px" }}>
               <button onClick={() => setShowDeleteConfirm(false)}
-                style={{ flex: 1, padding: "10px", background: T.surfaceAlt, border: `1px solid ${T.border}`, borderRadius: "8px", color: T.textBright, fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "10px", background: "#f3f4f2", border: `1px solid ${T.border}`, borderRadius: "8px", color: T.textBright, fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>
                 {txt.deleteNo}
               </button>
               <button
+                onClick={() => { setShowDeleteConfirm(false); if (onDeleteAccount) onDeleteAccount(); }}
                 style={{ flex: 1, padding: "10px", background: T.red, border: "none", borderRadius: "8px", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>
                 {txt.deleteYes}
               </button>

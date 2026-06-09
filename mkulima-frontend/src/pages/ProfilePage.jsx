@@ -25,7 +25,6 @@ export default function ProfilePage({ user, county, setCounty, crop, setCrop, la
       title: "Your Profile",
       subtitle: "Update your personal details and farming preferences.",
       back: "Back to Settings",
-      photoHint: "Tap to update photo",
       personalSection: "Personal Information",
       nameLbl: "Full Name",
       namePlaceholder: "e.g. Mary Wambua",
@@ -128,7 +127,7 @@ export default function ProfilePage({ user, county, setCounty, crop, setCrop, la
 
   const inputStyle = {
     width: "100%",
-    background: "#070a0e",
+    background: "#c4c7c9",
     border: `1px solid ${T.borderBright}`,
     borderRadius: "8px",
     padding: "12px 14px 12px 42px",

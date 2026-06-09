@@ -11,8 +11,16 @@ from psycopg2.extras import RealDictCursor
 import bcrypt
 from datetime import datetime
 
-# 1. IMPORT YOUR ENGINE OBJECT DIRECTLY FROM MODELS.PY
-from models import kmeans_engine
+# Import kmeans engine safely — if models.py is missing or broken, the weather
+# endpoint falls back gracefully instead of preventing the whole server from starting
+try:
+    from models import kmeans_engine
+    KMEANS_AVAILABLE = True
+except Exception as _models_err:
+    kmeans_engine = None
+    KMEANS_AVAILABLE = False
+    print(f"[WARNING] Could not import kmeans_engine from models.py: {_models_err}")
+    print("[WARNING] /api/weather-advice will use static fallback cluster data.")
 
 # Import machine learning loaders safely
 try:
@@ -33,20 +41,12 @@ app.add_middleware(
 )
 
 # ════════════════════════════════════════════════════════════════════════
-# DUAL-DATABASE ROUTING CONNECTIONS CONFIGURATION (PORT: 6543)
+# DUAL-DATABASE ROUTING CONNECTIONS CONFIGURATION (PORT: 5432)
 # ════════════════════════════════════════════════════════════════════════
-DB_PARAMS = {
-    "dbname": "postgres",  # Your relational database name
-    "user": "postgres",
-    "password": os.getenv("POSTGRES_PASSWORD", "admin"), # Replace 'yourpassword' if needed
-    "host": "localhost",
-    "port": "5432"
-}
 
-# Both the relational and time-series logic now point to the same database
-# This prevents 'database does not exist' errors
+# Single active DB config — both relational and TimescaleDB queries use mkulima_smart
 DB_PARAMS = {
-    "dbname": "mkulima_smart", # Changed from "postgres" to match database.py
+    "dbname": "mkulima_smart",
     "user": "postgres",
     "password": os.getenv("POSTGRES_PASSWORD", "admin"),
     "host": "localhost",
@@ -189,16 +189,24 @@ def register_user(user_data: UserRegisterSchema):
 
 @app.post("/api/auth/login")
 def login_user(credentials: UserLoginSchema):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    # Accept phone, username, OR full_name — whichever the farmer types
-    cur.execute(
-        "SELECT * FROM users WHERE phone = %s OR username = %s OR full_name = %s;",
-        (credentials.username, credentials.username, credentials.username)
-    )
-    user = cur.fetchone()
-    cur.close()
-    conn.close()
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        # Accept phone, username, OR full_name — whichever the farmer types
+        cur.execute(
+            "SELECT * FROM users WHERE phone = %s OR username = %s OR full_name = %s;",
+            (credentials.username, credentials.username, credentials.username)
+        )
+        user = cur.fetchone()
+        cur.close()
+    except Exception as e:
+        if conn:
+            conn.close()
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
 
     if user and bcrypt.checkpw(credentials.password.encode('utf-8'), user['password_hash'].encode('utf-8')):
         return {
@@ -209,7 +217,7 @@ def login_user(credentials: UserLoginSchema):
                 "username":  user.get('username'),
                 "county":    user['county'],
                 "crop":      user.get('crop', 'Maize'),
-                "role":      user.get('role', 'farmer'),   # ← frontend uses this to route to admin
+                "role":      user.get('role', 'farmer'),
             }
         }
     raise HTTPException(status_code=401, detail="Invalid credentials. Check your phone/username and password.")
@@ -568,8 +576,17 @@ def live_weather_advice(
             avg_max_temp, avg_min_temp, total_precip = 29.5, 16.5, 8.0
 
     # 3. K-Means Live Cluster Assignment
-    scaled_vector = kmeans_engine.scale_features(max_temp=avg_max_temp, min_temp=avg_min_temp, rainfall=total_precip)
-    predicted_cluster = kmeans_engine.predict_cluster_id(scaled_vector)
+    if KMEANS_AVAILABLE and kmeans_engine is not None:
+        scaled_vector = kmeans_engine.scale_features(max_temp=avg_max_temp, min_temp=avg_min_temp, rainfall=total_precip)
+        predicted_cluster = kmeans_engine.predict_cluster_id(scaled_vector)
+    else:
+        # Static fallback mapping when model isn't loaded
+        if total_precip > 20:
+            predicted_cluster = 0
+        elif avg_max_temp > 30:
+            predicted_cluster = 2
+        else:
+            predicted_cluster = 3
 
     # Clean profile mappings to show on user cards
     RISK_PROFILE_MAPPING = {
@@ -592,8 +609,7 @@ def live_weather_advice(
     row = None
     try:
         conn = get_timescale_connection()
-        # Use RealDictCursor to safely map columns to keys without position errors
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
 
         cur.execute("""
             SELECT maize_rule, greengrams_rule, agronomic_rationale, source_citation
@@ -643,4 +659,4 @@ def live_weather_advice(
     }
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True) 
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

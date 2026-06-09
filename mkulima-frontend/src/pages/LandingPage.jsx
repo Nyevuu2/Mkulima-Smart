@@ -194,6 +194,7 @@ export default function LandingPage({ onGoToApp }) {
           {/* Mobile hamburger */}
           <button
             onClick={() => setMobileNav(!mobileNav)}
+            aria-label={mobileNav ? "Close navigation" : "Open navigation"}
             style={{ display: "none", background: "none", border: "none", cursor: "pointer", padding: 4 }}
             className="hamburger"
           >
