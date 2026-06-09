@@ -38,27 +38,18 @@ app.add_middleware(
 DB_PARAMS = {
     "dbname": "postgres",  # Your relational database name
     "user": "postgres",
-    "password": os.getenv("POSTGRES_PASSWORD", "admin"), # Replace 'yourpassword' if needed
+   "password": "yourpassword",  # <-- Change this to your real Postgres password
     "host": "localhost",
-    "port": "5432"
+    "port": "6543"
 }
 
-# Both the relational and time-series logic now point to the same database
-# This prevents 'database does not exist' errors
-DB_PARAMS = {
-    "dbname": "mkulima_smart", # Changed from "postgres" to match database.py
-    "user": "postgres",
-    "password": os.getenv("POSTGRES_PASSWORD", "admin"),
-    "host": "localhost",
-    "port": "5432"
-}
 
 TIMESCALEDB_PARAMS = {
-    "dbname": "mkulima_smart",
+    "dbname": "mkulima_timescale",  # Your standalone Timescale database name
     "user": "postgres",
-    "password": os.getenv("POSTGRES_PASSWORD", "admin"),
+    "password": "yourpassword",  # <-- Change this to your real Postgres password
     "host": "localhost",
-    "port": "5432"
+    "port": "6543"
 }
 
 def get_db_connection():
