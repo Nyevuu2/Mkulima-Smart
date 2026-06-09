@@ -302,12 +302,7 @@ export default function App() {
   if (viewMode === "website") return <LandingPage onGoToApp={() => setViewMode("login")} />;
 
   if (viewMode === "login") {
-    return (
-      <LoginPage
-        onLogin={handleAuthSuccess}
-        onGoToRegister={() => setViewMode("register")}
-      />
-    );
+    return <LoginPage onLogin={handleAuthSuccess} onGoToRegister={() => setViewMode("register")} />;
   }
 
   if (viewMode === "register") {

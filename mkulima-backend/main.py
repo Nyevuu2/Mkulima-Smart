@@ -36,7 +36,7 @@ app.add_middleware(
 # DUAL-DATABASE ROUTING CONNECTIONS CONFIGURATION (PORT: 6543)
 # ════════════════════════════════════════════════════════════════════════
 DB_PARAMS = {
-    "dbname": "mkulima_smart",
+    "dbname": "postgres",  # Your relational database name
     "user": "postgres",
     "password": os.getenv("POSTGRES_PASSWORD", "admin"), # Replace 'yourpassword' if needed
     "host": "localhost",
@@ -50,7 +50,15 @@ TIMESCALEDB_PARAMS = {
     "user": "postgres",
     "password": os.getenv("POSTGRES_PASSWORD", "admin"),
     "host": "localhost",
-    "port": "5432"
+    "port": "6543"
+}
+
+TIMESCALEDB_PARAMS = {
+    "dbname": "mkulima_timescale",  # Your standalone Timescale database name
+    "user": "postgres",
+    "password": "yourpassword",  # <-- Change this to your real Postgres password
+    "host": "localhost",
+    "port": "6543"
 }
 
 def get_db_connection():
@@ -635,4 +643,4 @@ def live_weather_advice(
     }
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True) 

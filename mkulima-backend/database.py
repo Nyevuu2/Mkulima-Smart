@@ -7,11 +7,11 @@ import os
 # Change passwords here or set env vars: POSTGRES_PASSWORD, ADMIN_INVITE_CODE
 # ════════════════════════════════════════════════════════════════════════
 DB_PARAMS = {
-    "dbname": "mkulima_smart",
+    "dbname": "postgres",  # Your relational database name
     "user": "postgres",
     "password": os.getenv("POSTGRES_PASSWORD", "admin"), # Replace 'yourpassword' if needed
     "host": "localhost",
-    "port": "5432"
+    "port": "6543"  # Active server host port
 }
 
 # Both the relational and time-series logic now point to the same database
@@ -220,7 +220,6 @@ def create_tables():
     finally:
         ts_cur.close()
         ts_conn.close()
-
 
 if __name__ == "__main__":
     create_tables()
