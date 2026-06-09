@@ -1,9 +1,8 @@
 import React, { useState } from "react";
 import {
   Globe, MapPin, Sprout, CheckCircle2,
-  Type, Lock, Trash2, LogOut, ShieldCheck,
-  FileText, Accessibility, Cookie, HelpCircle,
-  ChevronRight, Sun, Moon, Bell, BellOff, User,
+  Type, Lock, Trash2, LogOut,
+  ChevronRight, Bell, BellOff, User,
 } from "lucide-react";
 import { Card, T } from "../App";
 
@@ -150,7 +149,7 @@ export default function SettingsPage({
   );
 
   return (
-    <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "8px", maxWidth: "680px" }}>
+    <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "8px", width: "100%", boxSizing: "border-box" }}>
 
       {/* Header */}
       <div style={{ marginBottom: "12px" }}>
@@ -302,33 +301,7 @@ export default function SettingsPage({
         )}
       </Card>
 
-      {/* ── PRIVACY & LEGAL ──────────────────────────────── */}
-      <SectionHeader label={txt.privacySection} />
-      <Card style={{ overflow: "hidden" }}>
-        <RowButton icon={ShieldCheck} iconColor={T.blue} title={txt.privacy} onClick={() => {}} />
-        <div style={{ height: "1px", background: T.border, margin: "0 16px" }} />
-        <RowButton icon={FileText} iconColor={T.textDim} title={txt.terms} onClick={() => {}} />
-        <div style={{ height: "1px", background: T.border, margin: "0 16px" }} />
-        <RowButton icon={Cookie} iconColor={T.amber} title={txt.cookies} onClick={() => {}} />
-        <div style={{ height: "1px", background: T.border, margin: "0 16px" }} />
-        <RowButton icon={Accessibility} iconColor={T.accent} title={txt.accessibility} onClick={() => {}} />
-      </Card>
 
-      {/* ── SUPPORT ─────────────────────────────────────── */}
-      <SectionHeader label={txt.supportSection} />
-      <Card style={{ overflow: "hidden" }}>
-        <RowButton icon={HelpCircle} iconColor={T.accent} title={txt.helpCenter} sub={txt.helpCenterSub} onClick={() => {}} />
-        <div style={{ height: "1px", background: T.border, margin: "0 16px" }} />
-        <div style={{ padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: "14px", color: T.textDim }}>{txt.aboutApp}</span>
-          <span style={{ fontSize: "13px", color: T.textDim, background: T.surfaceAlt, padding: "4px 10px", borderRadius: "20px" }}>{txt.version}</span>
-        </div>
-      </Card>
-
-      {/* Footer note */}
-      <div style={{ textAlign: "center", padding: "14px", background: T.surfaceAlt, borderRadius: "8px", fontSize: "13px", color: T.textDim, fontStyle: "italic", border: `1px solid ${T.border}`, marginTop: "8px" }}>
-        {txt.saveMsg}
-      </div>
 
     </div>
   );
