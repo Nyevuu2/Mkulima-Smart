@@ -1,379 +1,289 @@
 import React, { useState, useEffect } from "react";
 import {
-  LayoutDashboard, Wallet,
-  CloudSun, Settings, Menu, X, User, Lock, ArrowRight, UserPlus, MapPin,
-  TrendingUp, Store
+  LayoutDashboard, Wallet, CloudSun, Settings,
+  TrendingUp, Store, User, LogOut, X
 } from "lucide-react";
 
-// Import existing view components
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/Login";
+import RegisterPage from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Expenses from "./pages/Expenses";
 import WeatherAdvisory from "./pages/WeatherAdvisory";
 import SettingsPage from "./pages/SettingsPage";
 import ProfilePage from "./pages/ProfilePage";
 import MarketIntelligence from "./pages/MarketIntelligence";
-
 import MarketSimulation from "./pages/MarketSimulation";
+import AdminDashboard from "./pages/AdminDashboard";
+
 // ============================================================================
-// SYSTEM COLOURS - HIGH CONTRAST FOR EASY READING (UNCHANGED FROM ORIGINAL)
+// DESIGN TOKENS — single source of truth for ALL pages
 // ============================================================================
 export const T = {
-  background: "#070a0e",
-  surface: "#131924",
-  surfaceAlt: "#1b2434",
-  border: "#26334a",
-  borderBright: "#41567c",
-  textBright: "#ffffff",
-  text: "#cbd5e1",
-  textDim: "#94a3b8",
-  accent: "#22c55e",        // ← Your original GREEN. Never changed.
-  accentDim: "#14532d",
-  blue: "#3b82f6",
-  amber: "#f59e0b",
-  red: "#ef4444",
+  bg:           "#f5f2eb",   // warm beige — page background
+  surface:      "#ffffff",   // white — default card background
+  surfaceAlt:   "#ede9df",   // beige — nested inputs / rows
+  surfaceGreen: "#1e5c2a",   // dark field green — weather, nature sections
+  surfaceGreenLight: "#eaf4ec", // pale green tint — sales / income sections
+  surfaceAmber: "#fff7e6",   // pale amber — expense / cost sections
+  border:       "#d6cfc0",
+  borderBright: "#b0a48e",
+  textBright:   "#111a0e",
+  text:         "#2d3b24",
+  textDim:      "#7a7260",
+  textOnDark:   "#ffffff",   // text on dark green backgrounds
+  accent:       "#2d7a3a",   // dark field green
+  accentDim:    "#d4edda",
+  blue:         "#1d6fa4",
+  amber:        "#c07a00",
+  amberLight:   "#ffa500",   // brighter amber for text on pale amber bg
+  red:          "#c0392b",
+  navHeight:    "72px",
+  headerHeight: "60px",
 };
 
 export const priceHistory = [
-  { month: "Jan",          maize: 3900, greengrams: 9800,  f: false },
-  { month: "Feb",          maize: 4100, greengrams: 10200, f: false },
-  { month: "Mar",          maize: 4250, greengrams: 10500, f: false },
-  { month: "Apr",          maize: 4000, greengrams: 9900,  f: false },
-  { month: "May",          maize: 3850, greengrams: 9400,  f: false },
-  { month: "Jun",   maize: 4100, greengrams: 10500, f: true  },
-  { month: "Jul",  maize: 4300, greengrams: 11200, f: true  },
-  { month: "Aug",  maize: 4500, greengrams: 11800, f: true  },
+  { month: "Jan", maize: 3900, greengrams: 9800,  f: false },
+  { month: "Feb", maize: 4100, greengrams: 10200, f: false },
+  { month: "Mar", maize: 4250, greengrams: 10500, f: false },
+  { month: "Apr", maize: 4000, greengrams: 9900,  f: false },
+  { month: "May", maize: 3850, greengrams: 9400,  f: false },
+  { month: "Jun", maize: 4100, greengrams: 10500, f: true  },
+  { month: "Jul", maize: 4300, greengrams: 11200, f: true  },
+  { month: "Aug", maize: 4500, greengrams: 11800, f: true  },
 ];
 
 // ============================================================================
-// SHARED UI PRIMITIVES (UNCHANGED FROM ORIGINAL)
+// SHARED UI PRIMITIVES
 // ============================================================================
 export function Card({ children, style, ...props }) {
   return (
-    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: "14px", ...style }} {...props}>
+    <div
+      style={{
+        background: T.surface,
+        border: `1px solid ${T.border}`,
+        borderRadius: "16px",
+        ...style,
+      }}
+      {...props}
+    >
       {children}
     </div>
   );
 }
 
-export function StatCard({ title, value, sub, icon: Icon, color }) {
+export function StatCard({ title, value, sub, icon: Icon, color, bg }) {
+  const c = color || T.accent;
+  const isDarkBg = bg && (bg === T.surfaceGreen);
+  const cardBg   = bg || T.surface;
+  const titleCol = isDarkBg ? "rgba(255,255,255,0.7)" : c;
+  const valueCol = isDarkBg ? "#ffffff" : T.textBright;
+  const subCol   = isDarkBg ? "rgba(255,255,255,0.6)" : T.textDim;
+  const iconBg   = isDarkBg ? "rgba(255,255,255,0.15)" : `${c}18`;
+  const iconCol  = isDarkBg ? "#ffffff" : c;
+  const borderCol = bg ? "transparent" : T.border;
+
   return (
-    <Card style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "12px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: "13px", color: T.textDim, fontWeight: 700, textTransform: "uppercase" }}>{title}</span>
-        {Icon && <Icon size={20} color={color || T.accent} />}
+    <div style={{
+      background: cardBg,
+      border: `1px solid ${borderCol}`,
+      borderRadius: "16px",
+      overflow: "hidden",
+      display: "flex",
+      flexDirection: "column",
+    }}>
+      {!bg && <div style={{ height: "4px", background: `linear-gradient(90deg, ${c}, ${c}55)` }} />}
+      <div style={{
+        background: bg ? "transparent" : `${c}0e`,
+        borderBottom: bg ? `1px solid rgba(255,255,255,0.12)` : `1px solid ${c}20`,
+        padding: "10px 18px",
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+      }}>
+        <span style={{ fontSize: "11px", color: titleCol, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>{title}</span>
+        {Icon && (
+          <div style={{ background: iconBg, padding: "6px", borderRadius: "8px" }}>
+            <Icon size={15} color={iconCol} />
+          </div>
+        )}
       </div>
-      <div>
-        <div style={{ fontSize: "32px", fontWeight: 800, color: T.textBright }}>{value}</div>
-        <div style={{ fontSize: "14px", color: T.text, marginTop: "4px" }}>{sub}</div>
+      <div style={{ padding: "14px 18px" }}>
+        <div style={{ fontSize: "26px", fontWeight: 900, color: valueCol, letterSpacing: "-0.5px" }}>{value}</div>
+        <div style={{ fontSize: "12px", color: subCol, marginTop: "5px" }}>{sub}</div>
       </div>
-    </Card>
+    </div>
   );
 }
 
 export function Chip({ label, color, bg }) {
   return (
-    <span style={{ fontSize: "12px", fontWeight: 700, padding: "6px 12px", borderRadius: "24px", background: bg || `${color}15`, color: color, border: `1px solid ${color}40` }}>
+    <span style={{
+      fontSize: "11px", fontWeight: 700,
+      padding: "5px 10px", borderRadius: "20px",
+      background: bg || `${color}15`,
+      color: color,
+      border: `1px solid ${color}35`,
+    }}>
       {label}
     </span>
   );
 }
 
 // ============================================================================
-// REGISTER PAGE (INLINE — UNCHANGED FROM ORIGINAL)
+// API BASE URL — reads from Vite env, falls back to localhost for development
 // ============================================================================
-function RegisterPage({ onRegisterSuccess, onGoToLogin, currentCounty, setDefaultCounty }) {
-  const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleRegisterSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-
-    try {
-      const response = await fetch("http://127.0.0.1:8000/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          full_name: fullName,
-          phone,
-          password,
-          county: currentCounty,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        // Registration successful → go straight into the app
-        onRegisterSuccess(data); // data = { id, full_name, county, ... }
-      } else {
-        setError(data.detail || "Registration failed. Please try again.");
-      }
-    } catch (err) {
-      // Backend offline → still let the user into the prototype (dev mode fallback)
-      console.warn("Backend offline — using local fallback for registration.");
-      onRegisterSuccess({ id: "local-001", full_name: fullName, county: currentCounty });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div style={{ background: "#070a0e", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", fontFamily: "system-ui, sans-serif" }}>
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: "16px", width: "100%", maxWidth: "460px", padding: "40px" }}>
-
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: "28px" }}>
-          <div style={{ width: "16px", height: "16px", borderRadius: "50%", background: T.accent, marginBottom: "12px" }} />
-          <h2 style={{ color: "#fff", fontSize: "24px", fontWeight: 900, margin: 0, letterSpacing: "0.02em" }}>Create Account</h2>
-          <p style={{ color: T.textDim, fontSize: "14px", marginTop: "6px", textAlign: "center" }}>Join MkulimaSmart to start tracking crop metrics</p>
-        </div>
-
-        {error && (
-          <div style={{ background: `${T.red}15`, border: `1px solid ${T.red}40`, borderRadius: "8px", padding: "12px", marginBottom: "16px", color: T.red, fontSize: "13px" }}>
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleRegisterSubmit} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
-
-          {/* Full Name */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <label style={{ fontSize: "11px", fontWeight: 700, color: T.textBright, textTransform: "uppercase" }}>Full Name</label>
-            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-              <User size={16} color={T.textDim} style={{ position: "absolute", left: "14px" }} />
-              <input type="text" placeholder="e.g. John Mutua" value={fullName} onChange={(e) => setFullName(e.target.value)}
-                style={{ width: "100%", background: "#070a0e", border: `1px solid ${T.borderBright}`, borderRadius: "8px", padding: "12px 14px 12px 42px", color: "#fff", fontSize: "14px", outline: "none" }} required />
-            </div>
-          </div>
-
-          {/* Phone */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <label style={{ fontSize: "11px", fontWeight: 700, color: T.textBright, textTransform: "uppercase" }}>Phone Number</label>
-            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-              <UserPlus size={16} color={T.textDim} style={{ position: "absolute", left: "14px" }} />
-              <input type="tel" placeholder="e.g. 0712345678" value={phone} onChange={(e) => setPhone(e.target.value)}
-                style={{ width: "100%", background: "#070a0e", border: `1px solid ${T.borderBright}`, borderRadius: "8px", padding: "12px 14px 12px 42px", color: "#fff", fontSize: "14px", outline: "none" }} required />
-            </div>
-          </div>
-
-          {/* County */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <label style={{ fontSize: "11px", fontWeight: 700, color: T.textBright, textTransform: "uppercase" }}>Primary Farming County</label>
-            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-              <MapPin size={16} color={T.textDim} style={{ position: "absolute", left: "14px" }} />
-              <select value={currentCounty} onChange={(e) => setDefaultCounty(e.target.value)}
-                style={{ width: "100%", background: "#070a0e", border: `1px solid ${T.borderBright}`, borderRadius: "8px", padding: "12px 14px 12px 42px", color: "#fff", fontSize: "14px", outline: "none", cursor: "pointer" }}>
-                <option value="Machakos">Machakos County</option>
-                <option value="Kitui">Kitui County</option>
-                <option value="Makueni">Makueni County</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Password */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <label style={{ fontSize: "11px", fontWeight: 700, color: T.textBright, textTransform: "uppercase" }}>Create Password</label>
-            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-              <Lock size={16} color={T.textDim} style={{ position: "absolute", left: "14px" }} />
-              <input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
-                style={{ width: "100%", background: "#070a0e", border: `1px solid ${T.borderBright}`, borderRadius: "8px", padding: "12px 14px 12px 42px", color: "#fff", fontSize: "14px", outline: "none" }} required />
-            </div>
-          </div>
-
-          <button type="submit" disabled={loading}
-            style={{ background: T.accent, color: "#000", border: "none", borderRadius: "8px", padding: "14px", fontSize: "15px", fontWeight: "bold", cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginTop: "10px", opacity: loading ? 0.7 : 1 }}>
-            {loading ? "Creating Account..." : <> Create Free Account <ArrowRight size={16} /> </>}
-          </button>
-        </form>
-
-        <div style={{ textAlign: "center", marginTop: "24px", fontSize: "13px", color: T.textDim }}>
-          Already have an account?{" "}
-          <span onClick={onGoToLogin} style={{ color: T.accent, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
-            Sign In here
-          </span>
-        </div>
-
-      </div>
-    </div>
-  );
-}
+const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const ML_BASE = import.meta.env.VITE_ML_API_URL || "http://127.0.0.1:8001";
 
 // ============================================================================
-// CORE APPLICATION — ORIGINAL STRUCTURE PRESERVED
-// Backend state (user, ML data, expenses) added without touching the UI
+// MAIN APP
 // ============================================================================
 export default function App() {
-
-  // ── ROUTER ──────────────────────────────────────────────────────────────
-  // "website" | "login" | "register" | "app"  (same as original)
-  const [viewMode, setViewMode] = useState("website");
+  const [viewMode, setViewMode] = useState("website"); // website | login | register | app
+  const [user, setUser] = useState(null);
   const [currentTab, setCurrentTab] = useState("dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [showProfileCard, setShowProfileCard] = useState(false);
-
-  // ── GLOBAL CONFIG (original) ────────────────────────────────────────────
   const [county, setCounty] = useState("Machakos");
   const [crop, setCrop] = useState("Maize");
+  const [cropView, setCropView] = useState("Maize"); // "Maize" | "Green Grams" | "Both"
   const [language, setLanguage] = useState("English");
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
-  // ── BACKEND: AUTH USER OBJECT ────────────────────────────────────────────
-  // null = not logged in. Set by LoginPage/RegisterPage on success.
-  // Shape: { id, full_name, county }
-  const [user, setUser] = useState(null);
-
-  // ── BACKEND: ML PREDICTIONS ──────────────────────────────────────────────
+  // ── WEATHER ADVISORY DATA ─────────────────────────────────────────────────
+  const [weatherAdviceData, setWeatherAdviceData] = useState(null);
   const [intelligenceData, setIntelligenceData] = useState(null);
   const [loadingML, setLoadingML] = useState(false);
   const [mlError, setMlError] = useState("");
+  const [refreshTick, setRefreshTick] = useState(0);
 
-  // ── BACKEND: EXPENSES ───────────────────────────────────────────────────
-  const [expenses, setExpenses] = useState([]);
-
-  // ── SYNC county selector with logged-in user's county ───────────────────
+  // ── RESTORE SESSION ON MOUNT ─────────────────────────────────────────────
+  // If user refreshes the page, pull auth state back from localStorage
   useEffect(() => {
-    if (user?.county) setCounty(user.county);
-  }, [user]);
+    const storedUser = localStorage.getItem("mkulima_user");
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser);
+        setUser(parsed);
+        if (parsed?.county) setCounty(parsed.county);
+        setViewMode("app");
+      } catch {
+        // Corrupted storage — clear and send to login
+        localStorage.removeItem("mkulima_user");
+        localStorage.removeItem("mkulima_token");
+      }
+    }
+  }, []);
 
-  // ── FETCH ML PREDICTIONS whenever user logs in or changes crop ───────────
+  // ── COORDINATED DATA FETCH (ML + WEATHER ADVICE) ─────────────────────────
+  // Re-runs whenever the user, crop, county, or viewMode changes
   useEffect(() => {
     if (!user || viewMode !== "app") return;
 
-    const fetchPredictions = async () => {
+    const fetchAllData = async () => {
       setLoadingML(true);
       setMlError("");
+
+      const targetCounty = (county || user.county || "machakos").toLowerCase().trim();
+      const cleanCrop = (crop || "").toLowerCase().replace(/\s+/g, "");
+      const cropParam = cleanCrop === "greengrams" ? "greengrams" : "maize";
+
       try {
-        const targetCounty = (user.county || county).toLowerCase().trim();
-        const cropParam = crop === "Maize" ? "maize" : "ndengu";
-        const res = await fetch(
-          `http://127.0.0.1:8000/api/predictions?crop=${cropParam}&county=${targetCounty}`
+        // 1. Machine Learning Prediction Endpoint
+        const resML = await fetch(
+          `${API_BASE}/api/predictions?crop=${cropParam}&county=${targetCounty}`
+          `${ML_BASE}/api/predictions?crop=${cropParam}&county=${targetCounty}`
         );
-        const data = await res.json();
-        if (res.ok) {
-          setIntelligenceData(data);
-        } else {
-          setMlError("Prediction API returned an error.");
+        if (resML.ok) {
+          const dataML = await resML.json();
+          setIntelligenceData(dataML);
         }
-      } catch {
-        setMlError("Prediction API offline. Showing cached data.");
+
+        // 2. TimescaleDB Weather Rule Fetch
+        const resWeather = await fetch(
+          `${API_BASE}/api/weather-advice?county=${targetCounty}&crop=${cropParam}`
+        );
+        if (resWeather.ok) {
+          const dataWeather = await resWeather.json();
+          setWeatherAdviceData(dataWeather);
+        }
+      } catch (err) {
+        console.error("API Fetch Error:", err);
+        setMlError("Prediction API offline. Showing cached configuration data.");
       } finally {
         setLoadingML(false);
       }
     };
 
-    fetchPredictions();
-    fetchExpenses();
-  }, [user, crop, viewMode]);
+    fetchAllData();
+  }, [user, crop, county, viewMode, refreshTick]);
 
-  const fetchExpenses = async () => {
-    if (!user) return;
-    try {
-      const res = await fetch(`http://127.0.0.1:8000/api/expenses/${user.id}`);
-      const data = await res.json();
-      if (res.ok) setExpenses(data);
-    } catch {
-      console.warn("Expenses API offline.");
-    }
+  const handleAuthSuccess = (userData) => {
+    setUser(userData);
+    if (userData?.county) setCounty(userData.county);
+    // Persist to localStorage so session survives page refresh
+    if (userData?.token) localStorage.setItem("mkulima_token", userData.token);
+    localStorage.setItem("mkulima_user", JSON.stringify(userData));
+    // Admins go to admin dashboard; farmers go to the app
+    setViewMode(userData?.role === "admin" ? "admin" : "app");
   };
 
-  // ── CALLED BY LoginPage / RegisterPage ON SUCCESS ────────────────────────
-  // Receives the user object from the backend and transitions to the app.
-  const handleAuthSuccess = (authenticatedUser) => {
-    setUser(authenticatedUser);
-    if (authenticatedUser?.county) setCounty(authenticatedUser.county);
-    setViewMode("app");
-  };
-
-  // ── SIGN OUT ─────────────────────────────────────────────────────────────
   const handleSignOut = () => {
     setUser(null);
+    setWeatherAdviceData(null);
     setIntelligenceData(null);
-    setExpenses([]);
-    setViewMode("website");
-    setShowProfileCard(false);
+    localStorage.removeItem("mkulima_user");
+    localStorage.removeItem("mkulima_token");
+    setViewMode("login");
+    setCurrentTab("dashboard");
+    setShowUserMenu(false);
   };
 
-  // ── TRANSLATIONS (original) ──────────────────────────────────────────────
-  const txt = {
-    English: {
-      logo: "MKULIMA SMART",
-      dash: "My Farm",
-      exp: "My Farm Expenses",
-      intelligence: "Market Intelligence",
-      marketplace: "Marketplace",
-      sim: "Market Calculator",
-      weather: "Weather Advice",
-      settings: "System Settings",
-      signout: "Exit Application / Return to Website",
-    },
-    Swahili: {
-      logo: "MKULIMA SMART",
-      dash: "Muhtasari wa Shamba",
-      exp: "Gharama za Shamba",
-      intelligence: "Soko",
-      marketplace: "Soko la Wakulima",
-      sim: "Kikokotoo cha Soko",
-      weather: "Ushauri wa Hali ya Chemba",
-      settings: "Mipangilio ya Mfumo",
-      signout: "Toka kwenye Mfumo / Rudi kwa Tovuti",
-    },
+  const isEng = language === "English";
+
+  const navLabels = {
+    English: { dashboard: "Home", expenses: "Costs", intelligence: "Prices", marketplace: "Market", advisory: "Weather", settings: "Settings" },
+    Swahili: { dashboard: "Nyumbani", expenses: "Gharama", intelligence: "Bei", marketplace: "Soko", advisory: "Hewa", settings: "Mipangilio" },
   }[language];
 
-  // ── PAGE RENDERER ────────────────────────────────────────────────────────
-  // Passes backend data down to child pages as props so they can use it
-  const renderWorkspaceView = () => {
+  const navigationRoutes = [
+    { id: "dashboard",    label: navLabels.dashboard,    icon: LayoutDashboard },
+    { id: "expenses",     label: navLabels.expenses,     icon: Wallet          },
+    { id: "intelligence", label: navLabels.intelligence, icon: TrendingUp      },
+    { id: "marketplace",  label: navLabels.marketplace,  icon: Store           },
+    { id: "advisory",     label: navLabels.advisory,     icon: CloudSun        },
+    { id: "settings",     label: navLabels.settings,     icon: Settings        },
+  ];
+
+  const renderPage = () => {
+    if (currentTab === "profile") {
+      return (
+        <ProfilePage
+          user={user} county={county} setCounty={setCounty}
+          crop={crop} setCrop={setCrop} language={language}
+          onBack={() => setCurrentTab("settings")}
+        />
+      );
+    }
+    const props = { county, crop, language, userContext: user ? { firstName: user.full_name?.split(" ")[0] } : {} };
     switch (currentTab) {
-      case "dashboard":
-        return (
-          <Dashboard
-            county={county}
-            crop={crop}
-            language={language}
-            // Backend props — pages can use these if they want, ignore if not ready
-            user={user}
-            intelligenceData={intelligenceData}
-            loadingML={loadingML}
-            mlError={mlError}
-          />
-        );
-      case "expenses":
-        return (
-          <Expenses
-            language={language}
-            // Backend props
-            user={user}
-            expenses={expenses}
-            onExpenseAdded={fetchExpenses}
-          />
-        );
-      case "intelligence":
-        return (
-          <MarketIntelligence
-            crop={crop}
-            county={county}
-            language={language}
-            user={user}
-          />
-        );
-      case "marketplace":
-        return <MarketSimulation user={user} language={language} />;
-      case "advisory":
-        return <WeatherAdvisory county={county} language={language} />;
-      case "profile":
-        return (
-          <ProfilePage
-            user={user}
-            county={county} setCounty={setCounty}
-            crop={crop} setCrop={setCrop}
-            language={language}
-            onBack={() => setCurrentTab("settings")}
-          />
-        );
+      case "dashboard":    return <Dashboard {...props} cropView={cropView} weatherAdviceData={weatherAdviceData} intelligenceData={intelligenceData} loadingML={loadingML} mlError={mlError} />;
+
+      case "expenses":     return <Expenses crop={crop} county={county} />;
+      // Pass cropView so MarketIntelligence knows if "Both" is selected
+      case "intelligence": return (
+  <MarketIntelligence
+    crop={cropView}
+    county={county}
+    language={isEng ? "en" : "sw"}
+    intelligenceData={intelligenceData}
+    loadingML={loadingML}
+    mlError={mlError}
+    onRefresh={() => {
+      // Re-trigger the coordinated fetch in App by flipping a refresh counter
+      setRefreshTick(t => t + 1);
+    }}
+  />
+);
+      case "marketplace":  return <MarketSimulation crop={crop} county={county} language={language} />;
+      case "advisory":     return <WeatherAdvisory county={county} crop={crop} language={language} weatherAdviceData={weatherAdviceData} />;
       case "settings":
         return (
           <SettingsPage
@@ -384,31 +294,13 @@ export default function App() {
             onLogout={handleSignOut}
           />
         );
-      default:
-        return <Dashboard county={county} crop={crop} language={language} user={user} />;
+      default: return <Dashboard {...props} />;
     }
   };
 
-  const navigationRoutes = [
-    { id: "dashboard",    label: txt.dash,          icon: LayoutDashboard },
-    { id: "expenses",     label: txt.exp,           icon: Wallet          },
-    { id: "intelligence", label: txt.intelligence,  icon: TrendingUp      },
-    { id: "marketplace",  label: txt.marketplace,   icon: Store           },
-    { id: "advisory",     label: txt.weather,       icon: CloudSun        },
-    { id: "settings",     label: txt.settings,      icon: Settings        },
-  ];
+  // ── PUBLIC ROUTES ──────────────────────────────────────────────────────────
+  if (viewMode === "website") return <LandingPage onGoToApp={() => setViewMode("login")} />;
 
-  // ============================================================================
-  // ROUTE: 1. PUBLIC LANDING PAGE
-  // ============================================================================
-  if (viewMode === "website") {
-    return <LandingPage onGoToApp={() => setViewMode("login")} />;
-  }
-
-  // ============================================================================
-  // ROUTE: 2. LOGIN
-  // onLogin now receives the user object from the backend
-  // ============================================================================
   if (viewMode === "login") {
     return (
       <LoginPage
@@ -418,132 +310,206 @@ export default function App() {
     );
   }
 
-  // ============================================================================
-  // ROUTE: 3. REGISTER
-  // ============================================================================
   if (viewMode === "register") {
     return (
       <RegisterPage
-        currentCounty={county}
-        setDefaultCounty={setCounty}
-        onRegisterSuccess={handleAuthSuccess}
         onGoToLogin={() => setViewMode("login")}
       />
     );
   }
 
-  // ============================================================================
-  // ROUTE: 4. AUTHENTICATED WORKSPACE — ORIGINAL SIDEBAR + HEADER LAYOUT
-  // ============================================================================
+  // ── ADMIN DASHBOARD ────────────────────────────────────────────────────────
+  if (viewMode === "admin") {
+    return <AdminDashboard user={user} onLogout={handleSignOut} />;
+  }
+
+  // ── AUTHENTICATED APP ──────────────────────────────────────────────────────
+  const activeRoute = navigationRoutes.find(r => r.id === currentTab);
+  const pageTitle = currentTab === "profile" ? (isEng ? "My Profile" : "Wasifu Wangu") : activeRoute?.label || "";
+
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: T.background, color: T.text, fontFamily: "system-ui, -apple-system, sans-serif" }}>
+    <div style={{
+      display: "flex", flexDirection: "column",
+      minHeight: "100vh", height: "100dvh",
+      background: T.bg, color: T.text,
+      fontFamily: "system-ui, -apple-system, sans-serif",
+      position: "relative",
+    }}>
 
-      {/* ── SIDEBAR ─────────────────────────────────────────────────────── */}
-      <div style={{
-        width: sidebarOpen ? "280px" : "0px",
+      {/* ── TOP HEADER ────────────────────────────────────────────────── */}
+      <header style={{
+        height: T.headerHeight,
         background: T.surface,
-        borderRight: `1px solid ${T.border}`,
-        display: "flex",
-        flexDirection: "column",
+        borderBottom: `1px solid ${T.border}`,
+        display: "flex", alignItems: "center",
         justifyContent: "space-between",
-        transition: "width 0.25s ease-out",
-        overflow: "hidden",
-        zIndex: 50,
-        position: "relative",
+        padding: "0 16px",
+        position: "sticky", top: 0, zIndex: 40,
+        flexShrink: 0,
       }}>
-        <div>
-          {/* Logo */}
-          <div style={{ padding: "24px", display: "flex", alignItems: "center", gap: "12px", borderBottom: `1px solid ${T.border}` }}>
-            <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: T.accent }} />
-            <span style={{ fontWeight: 900, fontSize: "16px", color: T.textBright, letterSpacing: "0.05em" }}>{txt.logo}</span>
-          </div>
+        {/* Left: Logo + Page Title */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: T.accent, flexShrink: 0 }} />
+          <span style={{ fontWeight: 900, fontSize: "15px", color: T.textBright, letterSpacing: "0.03em" }}>
+            MkulimaSmart
+          </span>
+          {pageTitle && (
+            <>
+              <span style={{ color: T.border, fontSize: "16px" }}>·</span>
+              <span style={{ fontSize: "14px", color: T.textDim, fontWeight: 600 }}>{pageTitle}</span>
+            </>
+          )}
+        </div>
 
-          {/* Nav links */}
-          <nav style={{ padding: "16px 12px", display: "flex", flexDirection: "column", gap: "6px" }}>
-            {navigationRoutes.map((route) => {
-              const Icon = route.icon;
-              const isActive = currentTab === route.id;
+        {/* Right: Crop Switcher + User */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {/* Crop view switcher — syncs cropView for dashboard & market intelligence */}
+          <div style={{ display: "flex", background: T.surfaceAlt, border: `1px solid ${T.border}`, borderRadius: "10px", overflow: "hidden" }}>
+            {[
+              { val: "Maize",       emoji: "🌽", short: isEng ? "Maize"  : "Mahindi" },
+              { val: "Green Grams", emoji: "🫘", short: isEng ? "Ndengu" : "Ndengu"  },
+              { val: "Both",        emoji: "⚡", short: "Both"                        },
+            ].map((opt, i) => {
+              const active = cropView === opt.val;
               return (
-                <button key={route.id} onClick={() => setCurrentTab(route.id)}
-                  style={{ display: "flex", alignItems: "center", gap: "14px", width: "100%", padding: "12px 16px", background: isActive ? `${T.accent}15` : "transparent", border: "none", borderRadius: "10px", color: isActive ? T.accent : T.text, fontSize: "15px", fontWeight: isActive ? 700 : 500, textAlign: "left", cursor: "pointer" }}>
-                  <Icon size={18} color={isActive ? T.accent : T.textDim} />
-                  {route.label}
+                <button key={opt.val}
+                  onClick={() => {
+                    setCropView(opt.val);
+                    // Keep single-crop pages in sync; "Both" stays as last single crop
+                    if (opt.val !== "Both") setCrop(opt.val);
+                  }}
+                  style={{
+                    padding: "7px 11px", border: "none", cursor: "pointer",
+                    background: active ? `${T.amber}20` : "transparent",
+                    color: active ? T.amber : T.textDim,
+                    fontSize: "12px", fontWeight: active ? 800 : 500,
+                    display: "flex", alignItems: "center", gap: "4px",
+                    borderRight: i < 2 ? `1px solid ${T.border}` : "none",
+                    transition: "all 0.15s",
+                  }}>
+                  {opt.emoji} {opt.short}
                 </button>
               );
             })}
-          </nav>
-        </div>
-
-        {/* Profile footer */}
-        <div style={{ padding: "16px", borderTop: `1px solid ${T.border}`, position: "relative" }}>
-          <div onClick={() => setCurrentTab("profile")}
-            style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px", borderRadius: "10px", cursor: "pointer", background: "transparent" }}>
-            <div style={{ background: T.border, padding: 8, borderRadius: "50%", display: "flex" }}>
-              <User size={16} color={T.textBright} />
-            </div>
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              {/* Show real name from backend if available, fallback to "John Mutua" */}
-              <span style={{ fontSize: "14px", fontWeight: 700, color: T.textBright }}>
-                {user?.full_name || "John Mutua"}
-              </span>
-              <span style={{ fontSize: "12px", color: T.textDim }}>{county}</span>
-            </div>
           </div>
 
-          {showProfileCard && (
-            <div style={{ position: "absolute", bottom: "76px", left: "16px", width: "244px", background: T.surface, border: `1px solid ${T.borderBright}`, borderRadius: "14px", padding: "16px", zIndex: 99, boxShadow: "0 12px 30px rgba(0,0,0,0.6)", display: "flex", flexDirection: "column", gap: "12px" }}>
-              <div style={{ fontSize: "13px", color: T.textBright }}>
-                <strong>Mkulima ID:</strong> {user?.id || "M-2026"}
-              </div>
-              <div style={{ fontSize: "13px", color: T.textBright }}>
-                <strong>Eneo:</strong> {county}
-              </div>
-              <button onClick={handleSignOut}
-                style={{ width: "100%", padding: "10px", background: T.red, color: "#fff", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>
-                {txt.signout}
-              </button>
-            </div>
-          )}
+          {/* User avatar */}
+          <button
+            onClick={() => setShowUserMenu(v => !v)}
+            style={{
+              width: "36px", height: "36px", borderRadius: "50%",
+              background: `${T.accent}20`, border: `1px solid ${T.accent}40`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", position: "relative",
+            }}>
+            <User size={16} color={T.accent} />
+          </button>
         </div>
-      </div>
+      </header>
 
-      {/* ── MAIN CONTENT AREA ───────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-
-        {/* Header */}
-        <header style={{ height: "72px", borderBottom: `1px solid ${T.border}`, background: T.surface, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", gap: "16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <button onClick={() => setSidebarOpen(!sidebarOpen)}
-              style={{ background: "transparent", border: "none", color: T.textBright, cursor: "pointer", display: "flex", alignItems: "center" }}>
-              {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+      {/* User dropdown menu */}
+      {showUserMenu && (
+        <>
+          <div onClick={() => setShowUserMenu(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 49 }} />
+          <div style={{
+            position: "fixed", top: "68px", right: "12px",
+            background: T.surface, border: `1px solid ${T.borderBright}`,
+            borderRadius: "14px", padding: "8px", zIndex: 50,
+            boxShadow: "0 16px 40px rgba(0,0,0,0.12)",
+            minWidth: "200px",
+          }}>
+            <div style={{ padding: "10px 12px", borderBottom: `1px solid ${T.border}`, marginBottom: "4px" }}>
+              <div style={{ fontSize: "15px", fontWeight: 800, color: T.textBright }}>{user?.full_name || "Farmer"}</div>
+              <div style={{ fontSize: "12px", color: T.textDim, marginTop: "2px" }}>{county} County · {crop}</div>
+            </div>
+            {/* County quick switch */}
+            <div style={{ padding: "8px 12px 4px" }}>
+              <div style={{ fontSize: "11px", color: T.textDim, fontWeight: 700, textTransform: "uppercase", marginBottom: "6px" }}>
+                {isEng ? "Your County" : "Kaunti Yako"}
+              </div>
+              {["Machakos", "Kitui", "Makueni"].map(c => (
+                <button key={c} onClick={() => { setCounty(c); setShowUserMenu(false); }}
+                  style={{
+                    display: "block", width: "100%", padding: "8px 10px",
+                    background: county === c ? `${T.accent}15` : "transparent",
+                    border: "none", borderRadius: "8px",
+                    color: county === c ? T.accent : T.text,
+                    fontSize: "14px", fontWeight: county === c ? 700 : 500,
+                    textAlign: "left", cursor: "pointer",
+                  }}>
+                  {c} County {county === c && "✓"}
+                </button>
+              ))}
+            </div>
+            <div style={{ height: "1px", background: T.border, margin: "4px 0" }} />
+            <button onClick={() => { setCurrentTab("profile"); setShowUserMenu(false); }}
+              style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "10px 12px", background: "transparent", border: "none", borderRadius: "8px", color: T.text, fontSize: "14px", cursor: "pointer" }}>
+              <User size={15} /> {isEng ? "Edit Profile" : "Hariri Wasifu"}
             </button>
-            <h1 style={{ fontSize: "16px", fontWeight: 700, color: T.textBright, margin: 0 }}>
-              {navigationRoutes.find(r => r.id === currentTab)?.label}
-            </h1>
+            <button onClick={handleSignOut}
+              style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "10px 12px", background: "transparent", border: "none", borderRadius: "8px", color: T.red, fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>
+              <LogOut size={15} /> {isEng ? "Sign Out" : "Toka"}
+            </button>
           </div>
+        </>
+      )}
 
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <select value={county} onChange={(e) => setCounty(e.target.value)}
-              style={{ background: T.background, border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "8px 14px", borderRadius: "8px", fontSize: "14px", fontWeight: 700, outline: "none", cursor: "pointer" }}>
-              <option value="Machakos">Machakos County</option>
-              <option value="Makueni">Makueni County</option>
-              <option value="Kitui">Kitui County</option>
-            </select>
+      {/* ── PAGE CONTENT ──────────────────────────────────────────────── */}
+      <main style={{
+        flex: 1,
+        overflowY: "auto",
+        background: T.bg,
+        paddingBottom: `calc(${T.navHeight} + 8px)`,
+      }}>
+        {renderPage()}
+      </main>
 
-            <select value={crop} onChange={(e) => setCrop(e.target.value)}
-              style={{ background: T.background, border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "8px 14px", borderRadius: "8px", fontSize: "14px", fontWeight: 700, outline: "none", cursor: "pointer" }}>
-              <option value="Maize">Mahindi (Maize)</option>
-              <option value="Green Grams">Ndengu (Green Grams)</option>
-            </select>
-          </div>
-        </header>
+      {/* ── BOTTOM NAVIGATION BAR ─────────────────────────────────────── */}
+      <nav style={{
+        position: "fixed", bottom: 0, left: 0, right: 0,
+        height: T.navHeight,
+        background: T.surface,
+        borderTop: `1px solid ${T.border}`,
+        display: "flex", alignItems: "center",
+        zIndex: 40,
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+      }}>
+        {navigationRoutes.map((route) => {
+          const Icon = route.icon;
+          const isActive = currentTab === route.id;
+          return (
+            <button
+              key={route.id}
+              onClick={() => setCurrentTab(route.id)}
+              style={{
+                flex: 1,
+                display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center",
+                gap: "4px", height: "100%",
+                background: "transparent", border: "none",
+                cursor: "pointer",
+                color: isActive ? T.accent : T.textDim,
+                position: "relative",
+                transition: "color 0.15s",
+                padding: "0",
+              }}>
+              {isActive && (
+                <div style={{
+                  position: "absolute", top: "6px",
+                  width: "20px", height: "3px",
+                  background: T.accent, borderRadius: "2px",
+                }} />
+              )}
+              <Icon size={22} strokeWidth={isActive ? 2.5 : 1.8} />
+              <span style={{ fontSize: "10px", fontWeight: isActive ? 800 : 500, letterSpacing: "0.02em" }}>
+                {route.label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
 
-        {/* Page content */}
-        <main style={{ flex: 1, overflowY: "auto", background: T.background }}>
-          {renderWorkspaceView()}
-        </main>
-
-      </div>
     </div>
   );
 }

@@ -3,11 +3,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import os
+import json
+import urllib.request
 import numpy as np
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import bcrypt
 from datetime import datetime
+
+# 1. IMPORT YOUR ENGINE OBJECT DIRECTLY FROM MODELS.PY
+from models import kmeans_engine
 
 # Import machine learning loaders safely
 try:
@@ -28,92 +33,142 @@ app.add_middleware(
 )
 
 # ════════════════════════════════════════════════════════════════════════
-# RAW POSTGRESQL CONNECTION CONFIGURATION
+# DUAL-DATABASE ROUTING CONNECTIONS CONFIGURATION (PORT: 6543)
 # ════════════════════════════════════════════════════════════════════════
 DB_PARAMS = {
     "dbname": "mkulima_smart",
     "user": "postgres",
-    "password": "admin",  # <-- Change this to your real Postgres password
+    "password": os.getenv("POSTGRES_PASSWORD", "admin"), # Replace 'yourpassword' if needed
+    "host": "localhost",
+    "port": "5432"
+}
+
+# Both the relational and time-series logic now point to the same database
+# This prevents 'database does not exist' errors
+TIMESCALEDB_PARAMS = {
+    "dbname": "mkulima_smart",
+    "user": "postgres",
+    "password": os.getenv("POSTGRES_PASSWORD", "admin"),
     "host": "localhost",
     "port": "5432"
 }
 
 def get_db_connection():
+    """Connects to the Teammate's standard web relational tables."""
     return psycopg2.connect(**DB_PARAMS, cursor_factory=RealDictCursor)
 
-def create_tables():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            full_name VARCHAR(100) NOT NULL,
-            phone VARCHAR(20) UNIQUE NOT NULL,
-            county VARCHAR(50) NOT NULL,
-            password_hash VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-    """)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS expenses (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            description VARCHAR(255) NOT NULL,
-            category VARCHAR(50) NOT NULL,
-            amount NUMERIC(12, 2) NOT NULL,
-            date DATE NOT NULL
-        );
-    """)
-    conn.commit()
-    cur.close()
-    conn.close()
+def get_timescale_connection():
+    """Connects to your structured analytical/TimescaleDB knowledge base."""
+    return psycopg2.connect(**TIMESCALEDB_PARAMS, cursor_factory=RealDictCursor)
 
-# Automatically build/verify PostgreSQL tables on startup
-create_tables()
 
 # ════════════════════════════════════════════════════════════════════════
-# PYDANTIC SCHEMAS FOR USER & EXPENSE INPUT VALIDATION
+# ADMIN INVITE CODE — set ADMIN_INVITE_CODE in your .env to change it
+# Any teammate who registers with this code gets role='admin'
+# Change the env var at any time to revoke the old code
+# ════════════════════════════════════════════════════════════════════════
+ADMIN_INVITE_CODE = os.getenv("ADMIN_INVITE_CODE", "mkulima-admin-2026")
+
+# ════════════════════════════════════════════════════════════════════════
+# PYDANTIC SCHEMAS
 # ════════════════════════════════════════════════════════════════════════
 class UserRegisterSchema(BaseModel):
     full_name: str
     phone: str
     county: str
     password: str
+    username: Optional[str] = None       # optional short login alias
+    crop: Optional[str] = "Maize"
+    invite_code: Optional[str] = None    # pass ADMIN_INVITE_CODE to get admin role
 
 class UserLoginSchema(BaseModel):
-    username: str  # Phone or Full name
+    username: str   # accepts phone, username, or full_name
     password: str
 
 class ExpenseCreateSchema(BaseModel):
     description: str
     category: str
     amount: float
-    date: str  # Format: YYYY-MM-DD
+    date: str
+    note: Optional[str] = None
+    season: Optional[str] = None
+    crop: Optional[str] = None
+    county: Optional[str] = None
+
+class SaleCreateSchema(BaseModel):
+    bags: int
+    price_per_bag: float
+    sale_date: str
+    buyer_note: Optional[str] = None
+    season: Optional[str] = None
+    crop: Optional[str] = None
+    county: Optional[str] = None
+
+class MarketplaceListingSchema(BaseModel):
+    farmer_name: str
+    crop: str
+    quantity: int
+    unit: Optional[str] = "90kg bags"
+    price_per_unit: float
+    phone: str
+    county: str
+    notes: Optional[str] = None
 
 # ════════════════════════════════════════════════════════════════════════
-# NEW AUTHENTICATION & FINANCIAL DATA ENDPOINTS (RAW SQL)
+# AUTH ENDPOINTS
 # ════════════════════════════════════════════════════════════════════════
 
 @app.post("/api/auth/register", status_code=201)
 def register_user(user_data: UserRegisterSchema):
     hashed_pw = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+    # Determine role — admin only if invite code matches
+    role = "admin" if (user_data.invite_code and user_data.invite_code == ADMIN_INVITE_CODE) else "farmer"
+
+    # Auto-generate username if not provided: firstname_id (finalised after insert)
     conn = get_db_connection()
     cur = conn.cursor()
     try:
         cur.execute("SELECT id FROM users WHERE phone = %s;", (user_data.phone,))
         if cur.fetchone():
-            raise HTTPException(status_code=400, detail="A user with this phone number already exists")
-            
+            raise HTTPException(status_code=400, detail="A user with this phone number already exists.")
+
+        if user_data.username:
+            cur.execute("SELECT id FROM users WHERE username = %s;", (user_data.username,))
+            if cur.fetchone():
+                raise HTTPException(status_code=400, detail="That username is already taken. Please choose another.")
+
         cur.execute(
-            """INSERT INTO users (full_name, phone, county, password_hash) 
-               VALUES (%s, %s, %s, %s) RETURNING id;""",
-            (user_data.full_name, user_data.phone, user_data.county, hashed_pw)
+            """INSERT INTO users (full_name, phone, county, crop, role, password_hash)
+               VALUES (%s, %s, %s, %s, %s, %s) RETURNING id;""",
+            (user_data.full_name, user_data.phone, user_data.county,
+             user_data.crop or "Maize", role, hashed_pw)
         )
         new_id = cur.fetchone()['id']
+
+        # Set username: provided value OR auto-generated fallback
+        final_username = user_data.username or (
+            user_data.full_name.split()[0].lower() + "_" + str(new_id)
+        )
+        cur.execute("UPDATE users SET username = %s WHERE id = %s;", (final_username, new_id))
+
+        # Create default settings row
+        cur.execute(
+            "INSERT INTO user_settings (user_id) VALUES (%s) ON CONFLICT (user_id) DO NOTHING;",
+            (new_id,)
+        )
+
         conn.commit()
         return {
             "message": "Account created successfully",
-            "user": {"id": new_id, "name": user_data.full_name, "county": user_data.county}
+            "user": {
+                "id": new_id,
+                "full_name": user_data.full_name,
+                "username": final_username,
+                "county": user_data.county,
+                "crop": user_data.crop or "Maize",
+                "role": role
+            }
         }
     except Exception as e:
         conn.rollback()
@@ -123,11 +178,16 @@ def register_user(user_data: UserRegisterSchema):
         cur.close()
         conn.close()
 
+
 @app.post("/api/auth/login")
 def login_user(credentials: UserLoginSchema):
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE phone = %s OR full_name = %s;", (credentials.username, credentials.username))
+    # Accept phone, username, OR full_name — whichever the farmer types
+    cur.execute(
+        "SELECT * FROM users WHERE phone = %s OR username = %s OR full_name = %s;",
+        (credentials.username, credentials.username, credentials.username)
+    )
     user = cur.fetchone()
     cur.close()
     conn.close()
@@ -135,9 +195,20 @@ def login_user(credentials: UserLoginSchema):
     if user and bcrypt.checkpw(credentials.password.encode('utf-8'), user['password_hash'].encode('utf-8')):
         return {
             "message": "Login successful",
-            "user": {"id": user['id'], "full_name": user['full_name'], "county": user['county']}
+            "user": {
+                "id":        user['id'],
+                "full_name": user['full_name'],
+                "username":  user.get('username'),
+                "county":    user['county'],
+                "crop":      user.get('crop', 'Maize'),
+                "role":      user.get('role', 'farmer'),   # ← frontend uses this to route to admin
+            }
         }
-    raise HTTPException(status_code=401, detail="Invalid login credentials")
+    raise HTTPException(status_code=401, detail="Invalid credentials. Check your phone/username and password.")
+
+# ════════════════════════════════════════════════════════════════════════
+# EXPENSES
+# ════════════════════════════════════════════════════════════════════════
 
 @app.post("/api/expenses/{user_id}", status_code=201)
 def add_expense(user_id: int, expense: ExpenseCreateSchema):
@@ -145,9 +216,10 @@ def add_expense(user_id: int, expense: ExpenseCreateSchema):
     cur = conn.cursor()
     try:
         cur.execute(
-            """INSERT INTO expenses (user_id, description, category, amount, date)
-               VALUES (%s, %s, %s, %s, %s);""",
-            (user_id, expense.description, expense.category, expense.amount, expense.date)
+            """INSERT INTO expenses (user_id, description, category, amount, date, note, season, crop, county)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);""",
+            (user_id, expense.description, expense.category, expense.amount, expense.date,
+             expense.note, expense.season, expense.crop, expense.county)
         )
         conn.commit()
         return {"message": "Expense saved successfully"}
@@ -166,17 +238,194 @@ def get_expenses(user_id: int):
     rows = cur.fetchall()
     cur.close()
     conn.close()
-    
-    return [{
-        "id": row['id'],
-        "description": row['description'],
-        "category": row['category'],
-        "amount": float(row['amount']),
-        "date": row['date'].strftime('%Y-%m-%d')
-    } for row in rows]
+    return [{"id": r['id'], "description": r['description'], "category": r['category'],
+             "amount": float(r['amount']), "date": r['date'].strftime('%Y-%m-%d'),
+             "note": r.get('note'), "season": r.get('season'),
+             "crop": r.get('crop'), "county": r.get('county')} for r in rows]
+
+@app.delete("/api/expenses/{expense_id}")
+def delete_expense(expense_id: int):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM expenses WHERE id = %s;", (expense_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return {"message": "Expense deleted"}
 
 # ════════════════════════════════════════════════════════════════════════
-# ORIGINAL SPECIFIC NESTED LSTM MODEL LOADER ENGINE
+# SALES
+# ════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/sales/{user_id}", status_code=201)
+def add_sale(user_id: int, sale: SaleCreateSchema):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """INSERT INTO sales (user_id, bags, price_per_bag, sale_date, buyer_note, season, crop, county)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id, total_revenue;""",
+            (user_id, sale.bags, sale.price_per_bag, sale.sale_date,
+             sale.buyer_note, sale.season, sale.crop, sale.county)
+        )
+        row = cur.fetchone()
+        conn.commit()
+        return {"message": "Sale logged", "id": row['id'], "total_revenue": float(row['total_revenue'])}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cur.close()
+        conn.close()
+
+@app.get("/api/sales/{user_id}")
+def get_sales(user_id: int):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM sales WHERE user_id = %s ORDER BY sale_date DESC;", (user_id,))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [{"id": r['id'], "bags": r['bags'], "price_per_bag": float(r['price_per_bag']),
+             "total_revenue": float(r['total_revenue']), "sale_date": r['sale_date'].strftime('%Y-%m-%d'),
+             "buyer_note": r.get('buyer_note'), "season": r.get('season'),
+             "crop": r.get('crop'), "county": r.get('county')} for r in rows]
+
+# ════════════════════════════════════════════════════════════════════════
+# MARKETPLACE
+# ════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/marketplace", status_code=201)
+def create_listing(listing: MarketplaceListingSchema, user_id: Optional[int] = None):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """INSERT INTO marketplace_listings
+               (user_id, farmer_name, crop, quantity, unit, price_per_unit, phone, county, notes)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;""",
+            (user_id, listing.farmer_name, listing.crop, listing.quantity, listing.unit,
+             listing.price_per_unit, listing.phone, listing.county, listing.notes)
+        )
+        new_id = cur.fetchone()['id']
+        conn.commit()
+        return {"message": "Listing posted", "id": new_id}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cur.close()
+        conn.close()
+
+@app.get("/api/marketplace")
+def get_listings(county: Optional[str] = None, crop: Optional[str] = None):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    query = "SELECT * FROM marketplace_listings WHERE status = 'active'"
+    params = []
+    if county:
+        query += " AND LOWER(county) = %s"; params.append(county.lower())
+    if crop:
+        query += " AND LOWER(crop) = %s"; params.append(crop.lower())
+    query += " ORDER BY posted_at DESC;"
+    cur.execute(query, params)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [{"id": r['id'], "farmer_name": r['farmer_name'], "crop": r['crop'],
+             "quantity": r['quantity'], "unit": r['unit'],
+             "price_per_unit": float(r['price_per_unit']), "phone": r['phone'],
+             "county": r['county'], "notes": r.get('notes'),
+             "posted_at": r['posted_at'].strftime('%Y-%m-%d')} for r in rows]
+
+@app.patch("/api/marketplace/{listing_id}/status")
+def update_listing_status(listing_id: int, status: str):
+    if status not in ("active", "sold", "removed"):
+        raise HTTPException(status_code=400, detail="status must be active, sold, or removed")
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("UPDATE marketplace_listings SET status = %s WHERE id = %s;", (status, listing_id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return {"message": f"Listing marked as {status}"}
+
+# ════════════════════════════════════════════════════════════════════════
+# ADMIN ENDPOINTS
+# ════════════════════════════════════════════════════════════════════════
+
+def require_admin(user_id: int, conn):
+    cur = conn.cursor()
+    cur.execute("SELECT role FROM users WHERE id = %s;", (user_id,))
+    row = cur.fetchone()
+    cur.close()
+    if not row or row['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required.")
+
+@app.get("/api/admin/overview")
+def admin_overview(admin_id: int):
+    conn = get_db_connection()
+    require_admin(admin_id, conn)
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) AS total FROM users WHERE role = 'farmer';")
+    farmer_count = cur.fetchone()['total']
+    cur.execute("SELECT COUNT(*) AS total FROM sales;")
+    sale_count = cur.fetchone()['total']
+    cur.execute("SELECT COUNT(*) AS total FROM marketplace_listings WHERE status = 'active';")
+    active_listings = cur.fetchone()['total']
+    cur.execute("SELECT COALESCE(SUM(total_revenue),0) AS total FROM sales;")
+    total_revenue = float(cur.fetchone()['total'])
+    cur.execute("SELECT COUNT(DISTINCT county) AS total FROM users;")
+    counties = cur.fetchone()['total']
+    cur.close()
+    conn.close()
+    return {"farmers_registered": farmer_count, "sales_logged": sale_count,
+            "active_listings": active_listings,
+            "total_platform_revenue_ksh": total_revenue, "counties_covered": counties}
+
+@app.get("/api/admin/farmers")
+def admin_get_farmers(admin_id: int):
+    conn = get_db_connection()
+    require_admin(admin_id, conn)
+    cur = conn.cursor()
+    cur.execute("""SELECT id, full_name, username, phone, county, crop, role, created_at
+                   FROM users ORDER BY created_at DESC;""")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [{"id": r['id'], "full_name": r['full_name'], "username": r.get('username'),
+             "phone": r['phone'], "county": r['county'], "crop": r.get('crop'),
+             "role": r['role'], "joined": r['created_at'].strftime('%Y-%m-%d')} for r in rows]
+
+@app.patch("/api/admin/farmers/{target_id}/role")
+def admin_change_role(target_id: int, new_role: str, admin_id: int):
+    if new_role not in ("farmer", "admin"):
+        raise HTTPException(status_code=400, detail="role must be farmer or admin")
+    conn = get_db_connection()
+    require_admin(admin_id, conn)
+    cur = conn.cursor()
+    cur.execute("UPDATE users SET role = %s WHERE id = %s;", (new_role, target_id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return {"message": f"User {target_id} role updated to {new_role}"}
+
+@app.get("/api/admin/marketplace")
+def admin_get_all_listings(admin_id: int):
+    conn = get_db_connection()
+    require_admin(admin_id, conn)
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM marketplace_listings ORDER BY posted_at DESC;")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [{"id": r['id'], "farmer_name": r['farmer_name'], "crop": r['crop'],
+             "quantity": r['quantity'], "price_per_unit": float(r['price_per_unit']),
+             "phone": r['phone'], "county": r['county'], "status": r['status'],
+             "posted_at": r['posted_at'].strftime('%Y-%m-%d')} for r in rows]
+
+# ════════════════════════════════════════════════════════════════════════
+# SPECIFIC NESTED LSTM MODEL LOADER ENGINE (FILE-BASED INFERENCE)
 # ════════════════════════════════════════════════════════════════════════
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "ml-service", "models") 
@@ -207,7 +456,7 @@ def predict_crop_price(crop_key: str, base_price: float) -> list:
     return [base_price + 180.0, base_price + 320.0, base_price + 500.0]
 
 # ════════════════════════════════════════════════════════════════════════
-# ORIGINAL INTEGRATED ADVISORY & FINANCIAL DATA ENDPOINT
+# INTEGRATED ADVISORY & FINANCIAL DATA ENDPOINT
 # ════════════════════════════════════════════════════════════════════════
 class PriceTimelinePoint(BaseModel):
     month: str
@@ -272,47 +521,118 @@ def get_integrated_intelligence(
     )
 
 # ════════════════════════════════════════════════════════════════════════
-# TEAMMATE'S CLUSTER DRIVEN WEATHER ADVISORY ENDPOINT
+# FIXED: CLUSTER-DRIVEN WEATHER ADVISORY ENDPOINT (FLAT RESPONSE FOR INTERGRATION)
 # ════════════════════════════════════════════════════════════════════════
+
 @app.get("/api/weather-advice")
-def live_weather_advice(county: str = Query(...)):
-    normalized_county = county.lower().strip()
+def live_weather_advice(
+    county: str = Query(...),
+    crop: Optional[str] = Query(None)
+):
+    # 1. Clean and normalize input parameters
+    normalized_county = county.lower().strip() if county else "machakos"
     
-    if normalized_county == "kitui":
-        return {
-            "status": "success",
-            "data": {
-                "cluster_id": 2,
-                "climate_condition": "Critical Heat & Moisture Stress",
-                "alert_level": "CRITICAL RISK - Drought Mitigation Required",
-                "crop_specific_rules": {
-                    "Maize": "EMERGENCY: Evapotranspiration exceeds rainfall thresholds. Halt all seed applications. Cover exposed rows.",
-                    "Ndengu": "Extreme atmospheric temperatures will induce flower drop. Maintain absolute minimal field disruptions."
-                },
-                "traceability": {
-                    "agronomic_rationale": "Sustained high micro-climate indices paired with moisture depletion forces sudden stomatal closure in crop canopies.",
-                    "source_citation": "KALRO Arid and Semi-Arid Lands Technical Directive Document."
-                }
-            }
+    # Clean the crop text completely to capture "Green Grams", "ndengu", or "maize"
+    raw_crop = str(crop).lower().strip() if crop else "maize"
+    
+    # 2. Open-Meteo Dynamic Weather Tracking
+    try:
+        geo_coordinates = {
+            "machakos": {"lat": -1.5183, "lon": 37.2634},
+            "kitui": {"lat": -1.3670, "lon": 38.0106},
+            "makueni": {"lat": -1.8041, "lon": 37.6203}
         }
+        coords = geo_coordinates.get(normalized_county, geo_coordinates["machakos"])
+        open_meteo_url = f"https://api.open-meteo.com/v1/forecast?latitude={coords['lat']}&longitude={coords['lon']}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=Africa%2FNairobi"
+        
+        req = urllib.request.Request(open_meteo_url, headers={'User-Agent': 'MkulimaSmartPWA/1.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            weather_payload = json.loads(response.read().decode())
+            avg_max_temp = float(np.mean(weather_payload["daily"]["temperature_2m_max"]))
+            avg_min_temp = float(np.mean(weather_payload["daily"]["temperature_2m_min"]))
+            total_precip = float(np.sum(weather_payload["daily"]["precipitation_sum"]))
+    except Exception:
+        if normalized_county == "machakos":
+            avg_max_temp, avg_min_temp, total_precip = 26.5, 14.2, 18.5
+        elif normalized_county == "kitui":
+            avg_max_temp, avg_min_temp, total_precip = 31.0, 18.0, 4.2
+        else:
+            avg_max_temp, avg_min_temp, total_precip = 29.5, 16.5, 8.0
+
+    # 3. K-Means Live Cluster Assignment
+    scaled_vector = kmeans_engine.scale_features(max_temp=avg_max_temp, min_temp=avg_min_temp, rainfall=total_precip)
+    predicted_cluster = kmeans_engine.predict_cluster_id(scaled_vector)
+
+    # Clean profile mappings to show on user cards
+    RISK_PROFILE_MAPPING = {
+        0: "Optimal Moisture Profile",
+        1: "Thermal Depression Zone (Cool Stress)",
+        2: "Critical Heat & Moisture Deficit",
+        3: "Mild Moisture Deficit"
+    }
+    ALERT_MAPPING = {
+        0: "NORMAL STATUS - STABLE DEVELOPMENT",
+        1: "WATCH STATUS - THERMAL MONITORING",
+        2: "CRITICAL ALERT - EMERGENCY RESPONSE",
+        3: "ADVISORY STATUS - CONSERVATION PHASE"
+    }
+    
+    friendly_profile = RISK_PROFILE_MAPPING.get(predicted_cluster, "Standard Regional Microclimate")
+    friendly_alert = ALERT_MAPPING.get(predicted_cluster, "DYNAMIC ADVISORY MONITOR")
+
+    # 4. Fetch your exact core columns from TimescaleDB
+    row = None
+    try:
+        conn = get_timescale_connection()
+        # Use RealDictCursor to safely map columns to keys without position errors
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        cur.execute("""
+            SELECT maize_rule, greengrams_rule, agronomic_rationale, source_citation
+            FROM agronomic_knowledge_base
+            WHERE cluster_id = %s LIMIT 1;
+        """, (predicted_cluster,))
+        
+        db_row = cur.fetchone()
+        if db_row:
+            row = dict(db_row) # Safely converts the database row to a standard python dictionary
+        cur.close()
+        conn.close()
+    except Exception as db_err:
+        print(f"Database read error: {db_err}")
+
+    # Fallback structure if the database row isn't found
+    if not row:
+        row = {
+            "maize_rule": "Standard structural mulching layout recommended around growing base stems. [Fallback Seed Missing]",
+            "greengrams_rule": "Monitor root-zone humidity layers closely. Postpone intensive fertilizer applications. [Fallback Seed Missing]",
+            "agronomic_rationale": "Historical variations point to baseline seasonal microclimates. [Fallback]",
+            "source_citation": "KALRO Extension Libraries"
+        }
+
+   
+    # 🚨 FIX: Comprehensive, explicit check for both English and Swahili dropdown values
+    if "maize" in raw_crop or "mahindi" in raw_crop:
+        chosen_advisory_text = row["maize_rule"]
+    elif "ndengu" in raw_crop or "gram" in raw_crop:
+        chosen_advisory_text = row["greengrams_rule"]
     else:
-        # Default fallback for alternative areas (e.g., Machakos / Makueni)
-        return {
-            "status": "success",
-            "data": {
-                "cluster_id": 1,
-                "climate_condition": "Balanced Moisture Equilibrium",
-                "alert_level": "NOMINAL STATE - Low Seasonal Risks",
-                "crop_specific_rules": {
-                    "Maize": "Standard nutrient and moisture support workflows can proceed. Observe early vegetative traits for stalk borers.",
-                    "Ndengu": "Excellent microclimatic index layers. Safe to carry out foliar sprays or secondary weeding routines."
-                },
-                "traceability": {
-                    "agronomic_rationale": "Ambient thermal levels perfectly correspond to moisture indices for eastern-province crop varieties.",
-                    "source_citation": "Standard Regional Agricultural Extension Handbook."
-                }
-            }
-        }
+        # Secure fallback default if the frontend sends an unhandled string structure
+        chosen_advisory_text = row["maize_rule"]
+        
+    return {
+        "cluster_id": predicted_cluster,
+        "risk_profile": friendly_profile,
+        "advisory_title": friendly_alert,
+        "advisory_text": chosen_advisory_text,          # Returned cleanly to frontend
+        "agronomic_rationale": row["agronomic_rationale"], # Returned cleanly to frontend
+        "source_citation": row["source_citation"],
+        "telemetry": {
+            "temperature": round(avg_max_temp, 1),
+            "precipitation": round(total_precip, 1),
+            "humidity": 60.0
+        } 
+    }
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

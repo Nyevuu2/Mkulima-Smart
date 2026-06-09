@@ -3,15 +3,21 @@ import psycopg2
 from psycopg2.extras import execute_values
 from datetime import datetime
 
-# Replace with your external Cloud Database URI (Supabase or Neon)
-DB_URI = "postgresql://postgres:your_cloud_password@your-database-host.supabase.co:5432/postgres"
+# 1. LINKED EXACTLY TO YOUR CONTEXT METRICS FROM DATABASE.PY
+DB_PARAMS = {
+    "dbname": "mkulima_smart",
+    "user": "postgres",
+    "password": "admin",  # <-- Change this to your real Postgres password
+    "host": "localhost",
+    "port": "5432"
+}
 
 def clean_and_sync_portal_data():
     # Load your historical/downloaded excel or CSV file from the ministry site
     try:
         df = pd.read_csv("ministry_commodity_prices.csv")
     except FileNotFoundError:
-        print("Data file not found. Skipping synchronization loop.")
+        print("📁 Data file 'ministry_commodity_prices.csv' not found. Skipping synchronization loop.")
         return
 
     # Normalize columns to lowercase to prevent string-matching errors
@@ -50,7 +56,10 @@ def clean_and_sync_portal_data():
             continue # Skip records outside our project domain (e.g., Sorghum, Nairobi)
 
         # Standardize metric values: Read Wholesale price per 90kg bag
-        wholesale_price = float(row.get('wholesale_price', row.get('wholesale', 0)))
+        try:
+            wholesale_price = float(row.get('wholesale_price', row.get('wholesale', 0)))
+        except ValueError:
+            wholesale_price = 0.0
         
         # Safe format fallback check for data dates
         raw_date = row.get('date', datetime.today().strftime('%Y-%m-%d'))
@@ -63,9 +72,9 @@ def clean_and_sync_portal_data():
             raw_date
         ))
 
-    # 3. Batch insert/update records directly into your cloud tables
+    # 3. Batch insert/update records directly into your shared local database
     if cleaned_records:
-        conn = psycopg2.connect(DB_URI)
+        conn = psycopg2.connect(**DB_PARAMS)
         cursor = conn.cursor()
         
         cursor.execute("""
@@ -90,7 +99,7 @@ def clean_and_sync_portal_data():
         conn.commit()
         cursor.close()
         conn.close()
-        print(f"Successfully tracked and updated {len(cleaned_records)} entries from the Ministry data file.")
+        print(f"✅ Successfully tracked and updated {len(cleaned_records)} entries into the database.")
 
 if __name__ == "__main__":
     clean_and_sync_portal_data()

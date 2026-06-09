@@ -5,8 +5,10 @@ import { User, Phone, MapPin, Lock, ArrowRight } from "lucide-react";
 export default function RegisterPage({ onGoToLogin }) {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
+  const [username, setUsername] = useState("");
   const [county, setCounty] = useState("Machakos");
   const [password, setPassword] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -25,8 +27,10 @@ export default function RegisterPage({ onGoToLogin }) {
         body: JSON.stringify({
           full_name: fullName,
           phone: phone,
+          username: username || undefined,
           county: county,
-          password: password
+          password: password,
+          invite_code: inviteCode || undefined,
         })
       });
 
@@ -65,6 +69,23 @@ export default function RegisterPage({ onGoToLogin }) {
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
           
+          {/* Username Field */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "12px", fontWeight: 700, color: T.textBright, textTransform: "uppercase" }}>
+              Username <span style={{ color: T.textDim, fontWeight: 400, textTransform: "none" }}>(optional — used to log in)</span>
+            </label>
+            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+              <User size={16} color={T.textDim} style={{ position: "absolute", left: "14px" }} />
+              <input
+                type="text"
+                placeholder="e.g. john_mwangi"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                style={{ width: "100%", background: "#070a0e", border: `1px solid ${T.borderBright}`, borderRadius: "8px", padding: "12px 14px 12px 42px", color: "#fff", fontSize: "14px", outline: "none" }}
+              />
+            </div>
+          </div>
+
           {/* Full Name Field */}
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             <label style={{ fontSize: "12px", fontWeight: 700, color: T.textBright, textTransform: "uppercase" }}>Full Name</label>
@@ -126,6 +147,23 @@ export default function RegisterPage({ onGoToLogin }) {
                 onChange={(e) => setPassword(e.target.value)}
                 style={{ width: "100%", background: "#070a0e", border: `1px solid ${T.borderBright}`, borderRadius: "8px", padding: "12px 14px 12px 42px", color: "#fff", fontSize: "14px", outline: "none" }}
                 required
+              />
+            </div>
+          </div>
+
+          {/* Invite Code — optional, for admin registration */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "12px", fontWeight: 700, color: T.textBright, textTransform: "uppercase" }}>
+              Admin Invite Code <span style={{ color: T.textDim, fontWeight: 400, textTransform: "none" }}>(leave blank for farmer account)</span>
+            </label>
+            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+              <Lock size={16} color={T.textDim} style={{ position: "absolute", left: "14px" }} />
+              <input
+                type="password"
+                placeholder="Team invite code"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value)}
+                style={{ width: "100%", background: "#070a0e", border: `1px solid ${T.borderBright}`, borderRadius: "8px", padding: "12px 14px 12px 42px", color: "#fff", fontSize: "14px", outline: "none" }}
               />
             </div>
           </div>
