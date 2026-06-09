@@ -45,20 +45,20 @@ DB_PARAMS = {
 
 # Both the relational and time-series logic now point to the same database
 # This prevents 'database does not exist' errors
+DB_PARAMS = {
+    "dbname": "mkulima_smart", # Changed from "postgres" to match database.py
+    "user": "postgres",
+    "password": os.getenv("POSTGRES_PASSWORD", "admin"),
+    "host": "localhost",
+    "port": "5432"
+}
+
 TIMESCALEDB_PARAMS = {
     "dbname": "mkulima_smart",
     "user": "postgres",
     "password": os.getenv("POSTGRES_PASSWORD", "admin"),
     "host": "localhost",
-    "port": "6543"
-}
-
-TIMESCALEDB_PARAMS = {
-    "dbname": "mkulima_timescale",  # Your standalone Timescale database name
-    "user": "postgres",
-    "password": "yourpassword",  # <-- Change this to your real Postgres password
-    "host": "localhost",
-    "port": "6543"
+    "port": "5432"
 }
 
 def get_db_connection():

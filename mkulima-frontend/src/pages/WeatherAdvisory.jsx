@@ -26,11 +26,6 @@ export default function Weather({ county, crop = "Maize" }) {
   // Fallback defaults to shield components from empty string issues
   const activeCounty = county || "Machakos";
   const activeCrop = crop || "Maize";
-
-  // Fallback defaults to shield components from empty string issues
-  const activeCounty = county || "Machakos";
-  const activeCrop = crop || "Maize";
-
   // 🚨 FIXED: The hook now tracks activeCounty and activeCrop to update dynamically on click toggles
   useEffect(() => {
     const fetchLiveClimateAnalytics = async () => {

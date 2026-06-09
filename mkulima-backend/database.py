@@ -7,11 +7,11 @@ import os
 # Change passwords here or set env vars: POSTGRES_PASSWORD, ADMIN_INVITE_CODE
 # ════════════════════════════════════════════════════════════════════════
 DB_PARAMS = {
-    "dbname": "postgres",  # Your relational database name
+    "dbname": "mkulima_smart",
     "user": "postgres",
     "password": os.getenv("POSTGRES_PASSWORD", "admin"), # Replace 'yourpassword' if needed
     "host": "localhost",
-    "port": "6543"  # Active server host port
+    "port": "5432"  # Active server host port
 }
 
 # Both the relational and time-series logic now point to the same database
