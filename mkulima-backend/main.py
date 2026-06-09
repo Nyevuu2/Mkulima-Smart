@@ -43,6 +43,7 @@ app.add_middleware(
 # ════════════════════════════════════════════════════════════════════════
 # DUAL-DATABASE ROUTING CONNECTIONS CONFIGURATION (PORT: 5432)
 # ════════════════════════════════════════════════════════════════════════
+<<<<<<< HEAD
 
 # Single active DB config — both relational and TimescaleDB queries use mkulima_smart
 DB_PARAMS = {
@@ -52,13 +53,23 @@ DB_PARAMS = {
     "host": "localhost",
     "port": "5432"
 }
+=======
+DB_PARAMS = {
+    "dbname": "postgres",  # Your relational database name
+    "user": "postgres",
+   "password": "yourpassword",  # <-- Change this to your real Postgres password
+    "host": "localhost",
+    "port": "6543"
+}
+
+>>>>>>> cd4841284a6d4c3e124646b814715ef4a548d076
 
 TIMESCALEDB_PARAMS = {
-    "dbname": "mkulima_smart",
+    "dbname": "mkulima_timescale",  # Your standalone Timescale database name
     "user": "postgres",
-    "password": os.getenv("POSTGRES_PASSWORD", "admin"),
+    "password": "yourpassword",  # <-- Change this to your real Postgres password
     "host": "localhost",
-    "port": "5432"
+    "port": "6543"
 }
 
 def get_db_connection():

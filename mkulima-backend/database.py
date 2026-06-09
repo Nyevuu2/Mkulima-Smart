@@ -7,21 +7,21 @@ import os
 # Change passwords here or set env vars: POSTGRES_PASSWORD, ADMIN_INVITE_CODE
 # ════════════════════════════════════════════════════════════════════════
 DB_PARAMS = {
-    "dbname": "mkulima_smart",
+    "dbname": "postgres",
     "user": "postgres",
-    "password": os.getenv("POSTGRES_PASSWORD", "admin"), # Replace 'yourpassword' if needed
+    "password": "yourpassword",  # <-- Change this to your real Postgres password
     "host": "localhost",
-    "port": "5432"  # Active server host port
+    "port": "6543"  # Active server host port
 }
 
 # Both the relational and time-series logic now point to the same database
 # This prevents 'database does not exist' errors
 TIMESCALEDB_PARAMS = {
-    "dbname": "mkulima_smart",
-    "user": "postgres",
-    "password": os.getenv("POSTGRES_PASSWORD", "admin"),
-    "host": "localhost",
-    "port": "5432"
+    "dbname": "mkulima_timescale",  # Your standalone Timescale database name
+     "user": "postgres",
+     "password": "yourpassword",  # <-- Change this to your real Postgres password
+     "host": "localhost",
+     "port": "6543"
 }
 
 def get_relational_connection():
