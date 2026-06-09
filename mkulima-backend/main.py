@@ -3,11 +3,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import os
+import json
+import urllib.request
 import numpy as np
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import bcrypt
 from datetime import datetime
+
+# 1. IMPORT YOUR ENGINE OBJECT DIRECTLY FROM MODELS.PY
+from models import kmeans_engine
 
 # Import machine learning loaders safely
 try:
@@ -28,48 +33,32 @@ app.add_middleware(
 )
 
 # ════════════════════════════════════════════════════════════════════════
-# RAW POSTGRESQL CONNECTION CONFIGURATION
+# DUAL-DATABASE ROUTING CONNECTIONS CONFIGURATION (PORT: 6543)
 # ════════════════════════════════════════════════════════════════════════
 DB_PARAMS = {
-    "dbname": "mkulima_smart",
+    "dbname": "postgres",  # Your relational database name
     "user": "postgres",
-    "password": "admin",  # <-- Change this to your real Postgres password
+    "password": "yourpassword",  # <-- Change this to your real Postgres password
     "host": "localhost",
-    "port": "5432"
+    "port": "6543"
+}
+
+TIMESCALEDB_PARAMS = {
+    "dbname": "mkulima_timescale",  # Your standalone Timescale database name
+    "user": "postgres",
+    "password": "yourpassword",  # <-- Change this to your real Postgres password
+    "host": "localhost",
+    "port": "6543"
 }
 
 def get_db_connection():
+    """Connects to the Teammate's standard web relational tables."""
     return psycopg2.connect(**DB_PARAMS, cursor_factory=RealDictCursor)
 
-def create_tables():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            full_name VARCHAR(100) NOT NULL,
-            phone VARCHAR(20) UNIQUE NOT NULL,
-            county VARCHAR(50) NOT NULL,
-            password_hash VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-    """)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS expenses (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            description VARCHAR(255) NOT NULL,
-            category VARCHAR(50) NOT NULL,
-            amount NUMERIC(12, 2) NOT NULL,
-            date DATE NOT NULL
-        );
-    """)
-    conn.commit()
-    cur.close()
-    conn.close()
+def get_timescale_connection():
+    """Connects to your structured analytical/TimescaleDB knowledge base."""
+    return psycopg2.connect(**TIMESCALEDB_PARAMS, cursor_factory=RealDictCursor)
 
-# Automatically build/verify PostgreSQL tables on startup
-create_tables()
 
 # ════════════════════════════════════════════════════════════════════════
 # PYDANTIC SCHEMAS FOR USER & EXPENSE INPUT VALIDATION
@@ -91,7 +80,7 @@ class ExpenseCreateSchema(BaseModel):
     date: str  # Format: YYYY-MM-DD
 
 # ════════════════════════════════════════════════════════════════════════
-# NEW AUTHENTICATION & FINANCIAL DATA ENDPOINTS (RAW SQL)
+# AUTHENTICATION & FINANCIAL DATA ENDPOINTS (ROUTED VIA STANDARD RELATIONAL DB)
 # ════════════════════════════════════════════════════════════════════════
 
 @app.post("/api/auth/register", status_code=201)
@@ -176,7 +165,7 @@ def get_expenses(user_id: int):
     } for row in rows]
 
 # ════════════════════════════════════════════════════════════════════════
-# ORIGINAL SPECIFIC NESTED LSTM MODEL LOADER ENGINE
+# SPECIFIC NESTED LSTM MODEL LOADER ENGINE (FILE-BASED INFERENCE)
 # ════════════════════════════════════════════════════════════════════════
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "ml-service", "models") 
@@ -207,7 +196,7 @@ def predict_crop_price(crop_key: str, base_price: float) -> list:
     return [base_price + 180.0, base_price + 320.0, base_price + 500.0]
 
 # ════════════════════════════════════════════════════════════════════════
-# ORIGINAL INTEGRATED ADVISORY & FINANCIAL DATA ENDPOINT
+# INTEGRATED ADVISORY & FINANCIAL DATA ENDPOINT
 # ════════════════════════════════════════════════════════════════════════
 class PriceTimelinePoint(BaseModel):
     month: str
@@ -272,47 +261,118 @@ def get_integrated_intelligence(
     )
 
 # ════════════════════════════════════════════════════════════════════════
-# TEAMMATE'S CLUSTER DRIVEN WEATHER ADVISORY ENDPOINT
+# FIXED: CLUSTER-DRIVEN WEATHER ADVISORY ENDPOINT (FLAT RESPONSE FOR INTERGRATION)
 # ════════════════════════════════════════════════════════════════════════
+
 @app.get("/api/weather-advice")
-def live_weather_advice(county: str = Query(...)):
-    normalized_county = county.lower().strip()
+def live_weather_advice(
+    county: str = Query(...),
+    crop: Optional[str] = Query(None)
+):
+    # 1. Clean and normalize input parameters
+    normalized_county = county.lower().strip() if county else "machakos"
     
-    if normalized_county == "kitui":
-        return {
-            "status": "success",
-            "data": {
-                "cluster_id": 2,
-                "climate_condition": "Critical Heat & Moisture Stress",
-                "alert_level": "CRITICAL RISK - Drought Mitigation Required",
-                "crop_specific_rules": {
-                    "Maize": "EMERGENCY: Evapotranspiration exceeds rainfall thresholds. Halt all seed applications. Cover exposed rows.",
-                    "Ndengu": "Extreme atmospheric temperatures will induce flower drop. Maintain absolute minimal field disruptions."
-                },
-                "traceability": {
-                    "agronomic_rationale": "Sustained high micro-climate indices paired with moisture depletion forces sudden stomatal closure in crop canopies.",
-                    "source_citation": "KALRO Arid and Semi-Arid Lands Technical Directive Document."
-                }
-            }
+    # Clean the crop text completely to capture "Green Grams", "ndengu", or "maize"
+    raw_crop = str(crop).lower().strip() if crop else "maize"
+    
+    # 2. Open-Meteo Dynamic Weather Tracking
+    try:
+        geo_coordinates = {
+            "machakos": {"lat": -1.5183, "lon": 37.2634},
+            "kitui": {"lat": -1.3670, "lon": 38.0106},
+            "makueni": {"lat": -1.8041, "lon": 37.6203}
         }
+        coords = geo_coordinates.get(normalized_county, geo_coordinates["machakos"])
+        open_meteo_url = f"https://api.open-meteo.com/v1/forecast?latitude={coords['lat']}&longitude={coords['lon']}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=Africa%2FNairobi"
+        
+        req = urllib.request.Request(open_meteo_url, headers={'User-Agent': 'MkulimaSmartPWA/1.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            weather_payload = json.loads(response.read().decode())
+            avg_max_temp = float(np.mean(weather_payload["daily"]["temperature_2m_max"]))
+            avg_min_temp = float(np.mean(weather_payload["daily"]["temperature_2m_min"]))
+            total_precip = float(np.sum(weather_payload["daily"]["precipitation_sum"]))
+    except Exception:
+        if normalized_county == "machakos":
+            avg_max_temp, avg_min_temp, total_precip = 26.5, 14.2, 18.5
+        elif normalized_county == "kitui":
+            avg_max_temp, avg_min_temp, total_precip = 31.0, 18.0, 4.2
+        else:
+            avg_max_temp, avg_min_temp, total_precip = 29.5, 16.5, 8.0
+
+    # 3. K-Means Live Cluster Assignment
+    scaled_vector = kmeans_engine.scale_features(max_temp=avg_max_temp, min_temp=avg_min_temp, rainfall=total_precip)
+    predicted_cluster = kmeans_engine.predict_cluster_id(scaled_vector)
+
+    # Clean profile mappings to show on user cards
+    RISK_PROFILE_MAPPING = {
+        0: "Optimal Moisture Profile",
+        1: "Thermal Depression Zone (Cool Stress)",
+        2: "Critical Heat & Moisture Deficit",
+        3: "Mild Moisture Deficit"
+    }
+    ALERT_MAPPING = {
+        0: "NORMAL STATUS - STABLE DEVELOPMENT",
+        1: "WATCH STATUS - THERMAL MONITORING",
+        2: "CRITICAL ALERT - EMERGENCY RESPONSE",
+        3: "ADVISORY STATUS - CONSERVATION PHASE"
+    }
+    
+    friendly_profile = RISK_PROFILE_MAPPING.get(predicted_cluster, "Standard Regional Microclimate")
+    friendly_alert = ALERT_MAPPING.get(predicted_cluster, "DYNAMIC ADVISORY MONITOR")
+
+    # 4. Fetch your exact core columns from TimescaleDB
+    row = None
+    try:
+        conn = get_timescale_connection()
+        # Use RealDictCursor to safely map columns to keys without position errors
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        cur.execute("""
+            SELECT maize_rule, greengrams_rule, agronomic_rationale, source_citation
+            FROM agronomic_knowledge_base
+            WHERE cluster_id = %s LIMIT 1;
+        """, (predicted_cluster,))
+        
+        db_row = cur.fetchone()
+        if db_row:
+            row = dict(db_row) # Safely converts the database row to a standard python dictionary
+        cur.close()
+        conn.close()
+    except Exception as db_err:
+        print(f"Database read error: {db_err}")
+
+    # Fallback structure if the database row isn't found
+    if not row:
+        row = {
+            "maize_rule": "Standard structural mulching layout recommended around growing base stems. [Fallback Seed Missing]",
+            "greengrams_rule": "Monitor root-zone humidity layers closely. Postpone intensive fertilizer applications. [Fallback Seed Missing]",
+            "agronomic_rationale": "Historical variations point to baseline seasonal microclimates. [Fallback]",
+            "source_citation": "KALRO Extension Libraries"
+        }
+
+   
+    # 🚨 FIX: Comprehensive, explicit check for both English and Swahili dropdown values
+    if "maize" in raw_crop or "mahindi" in raw_crop:
+        chosen_advisory_text = row["maize_rule"]
+    elif "ndengu" in raw_crop or "gram" in raw_crop:
+        chosen_advisory_text = row["greengrams_rule"]
     else:
-        # Default fallback for alternative areas (e.g., Machakos / Makueni)
-        return {
-            "status": "success",
-            "data": {
-                "cluster_id": 1,
-                "climate_condition": "Balanced Moisture Equilibrium",
-                "alert_level": "NOMINAL STATE - Low Seasonal Risks",
-                "crop_specific_rules": {
-                    "Maize": "Standard nutrient and moisture support workflows can proceed. Observe early vegetative traits for stalk borers.",
-                    "Ndengu": "Excellent microclimatic index layers. Safe to carry out foliar sprays or secondary weeding routines."
-                },
-                "traceability": {
-                    "agronomic_rationale": "Ambient thermal levels perfectly correspond to moisture indices for eastern-province crop varieties.",
-                    "source_citation": "Standard Regional Agricultural Extension Handbook."
-                }
-            }
-        }
+        # Secure fallback default if the frontend sends an unhandled string structure
+        chosen_advisory_text = row["maize_rule"]
+        
+    return {
+        "cluster_id": predicted_cluster,
+        "risk_profile": friendly_profile,
+        "advisory_title": friendly_alert,
+        "advisory_text": chosen_advisory_text,          # Returned cleanly to frontend
+        "agronomic_rationale": row["agronomic_rationale"], # Returned cleanly to frontend
+        "source_citation": row["source_citation"],
+        "telemetry": {
+            "temperature": round(avg_max_temp, 1),
+            "precipitation": round(total_precip, 1),
+            "humidity": 60.0
+        } 
+    }
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True) 

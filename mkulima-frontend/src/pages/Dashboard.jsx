@@ -1,35 +1,41 @@
-import React, { useState } from "react";
+import React from "react";
 import { 
   TrendingUp, Wallet, CloudRain, Target, 
   Sprout, ShieldCheck, CheckCircle, Droplets, Thermometer, Box
 } from "lucide-react";
-import { Card, StatCard, Chip, T } from "../App";
+import { StatCard, Chip, T } from "../App";
 
-export default function Dashboard({ county, crop, language, userContext }) {
-  // Personalized Greeting
+export default function Dashboard({ county, crop, language, userContext, weatherAdviceData }) {
   const firstName = userContext?.firstName || "Farmer";
   
-  const isMaize = crop === "Maize";
+  // Normalize the crop property safely so capitalization doesn't break logic
+  const cleanCrop = (crop || "maize").toLowerCase().trim();
+  const isMaize = cleanCrop === "maize" || cleanCrop === "mahindi";
+  
   const isEng = language === "en" || language === "English";
   const activeLangKey = isEng ? "English" : "Swahili";
-  
-  // Model-Driven Weather Data
-  const [weather] = useState({ 
-    condition: "Partly Cloudy", 
-    temp: "24°C",
-    clusterAdvice: "Optimal conditions detected" // This will be dynamic from your K-Means model
-  });
-  
+  const activeCounty = county || "machakos";
+
+  // Dynamically map live values from our FastAPI / TimescaleDB data block with solid fallbacks
+  const finalAdvisoryText = weatherAdviceData?.advisory_text || 
+    (isMaize 
+      ? "Rain expected soon! Harvest mature crops quickly or secure storage covers." 
+      : "Atmospheric shifts detected. Verify soil dampness before spreading fertilizer.");
+
+  const finalCitationText = weatherAdviceData?.source_citation || "KALRO Reference Libraries";
+  const finalClusterProfile = weatherAdviceData?.risk_profile || "Analyzing Regional Vectors...";
+  const finalAlertTitle = weatherAdviceData?.advisory_title || "ADVISORY STATUS - MONITORING PHASE";
+  const finalTemp = weatherAdviceData?.telemetry?.temperature || 24;
+  const finalRain = weatherAdviceData?.telemetry?.precipitation || 12;
+
   const txt = {
     English: {
       welcome: `Welcome back, ${firstName}!`,
       pageTitle: "My Farm",
-      activeSector: `Currently viewing ${isMaize ? "Maize" : "Green Grams"} in ${county} County.`,
-      systemConnected: "System Connected",
-      weatherHeading: "Weather Advisory",
-      alertBody: isMaize 
-        ? "Rain expected soon! Harvest mature crops quickly or secure storage covers." 
-        : "Atmospheric shifts detected. Verify soil dampness before spreading fertilizer.",
+      activeSector: `Currently viewing ${isMaize ? "Maize" : "Green Grams"} in ${activeCounty.charAt(0).toUpperCase() + activeCounty.slice(1)}.`,
+      systemConnected: !weatherAdviceData ? "Syncing Hub..." : "System Connected",
+      weatherHeading: finalAlertTitle,
+      alertBody: finalAdvisoryText,
       marketValue: "Market Price Today",
       perBag: "per 90kg bag",
       nextMonth: "Expected Next Month",
@@ -50,12 +56,10 @@ export default function Dashboard({ county, crop, language, userContext }) {
     Swahili: {
       welcome: `Karibu tena, ${firstName}!`,
       pageTitle: "Shamba Langu",
-      activeSector: `Inaonyesha taarifa za ${isMaize ? "Mahindi" : "Ndengu"} katika Kaunti ya ${county}.`,
-      systemConnected: "Mfumo Umefunguliwa",
-      weatherHeading: "Ushauri wa Hali ya Hewa",
-      alertBody: isMaize 
-        ? "Mvua inatarajiwa hivi karibuni! Vuna haraka au funika maghala yako." 
-        : "Mabadiliko ya hewa yameonekana. Angalia unyevu kabla ya kuweka mbolea.",
+      activeSector: `Inaonyesha taarifa za ${isMaize ? "Mahindi" : "Ndengu"} katika Kaunti ya ${activeCounty.charAt(0).toUpperCase() + activeCounty.slice(1)}.`,
+      systemConnected: !weatherAdviceData ? "Inasawazisha..." : "Mfumo Umefunguliwa",
+      weatherHeading: finalAlertTitle === "ADVISORY STATUS - MONITORING PHASE" ? "Ushauri wa Hali ya Hewa" : finalAlertTitle,
+      alertBody: finalAdvisoryText,
       marketValue: "Bei ya Soko Leo",
       perBag: "kwa gunia la kilo 90",
       nextMonth: "Bei Inayotarajiwa Mwezi Ujao",
@@ -79,14 +83,14 @@ export default function Dashboard({ county, crop, language, userContext }) {
   const growthRate = isMaize ? "+14.2%" : "+8.7%";
   
   return (
-    <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "24px", background: T.bg, color: T.text }}>
+    <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "24px", background: T.background, color: T.text }}>
       
       {/* HEADER SECTION */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h2 style={{ fontSize: "24px", fontWeight: 800, color: T.textBright, margin: 0 }}>
           {txt.welcome}
         </h2>
-        <Chip label={txt.systemConnected} color={T.accent} />
+        <Chip label={txt.systemConnected} color={!weatherAdviceData ? T.amber : T.accent} />
       </div>
 
       {/* 1. SECTOR METADATA BAR */}
@@ -99,21 +103,27 @@ export default function Dashboard({ county, crop, language, userContext }) {
         </div>
       </div>
 
-      {/* 2. LIVE WEATHER ADVISORY (MODEL INTEGRATED) */}
+      {/* 2. LIVE WEATHER ADVISORY */}
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "16px", background: `${T.blue}10`, border: `1px solid ${T.blue}25`, padding: "20px", borderRadius: "14px" }}>
         <div style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
           <CloudRain size={22} color={T.blue} style={{ marginTop: "2px" }} />
           <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
             <h4 style={{ fontSize: "15px", fontWeight: "800", color: T.textBright, margin: 0 }}>{txt.weatherHeading}</h4>
             <p style={{ fontSize: "14px", color: T.text, margin: 0, lineHeight: 1.4 }}>{txt.alertBody}</p>
+            <span style={{ fontSize: "11px", color: T.textDim, fontStyle: "italic", marginTop: "6px" }}>
+              Source: {finalCitationText}
+            </span>
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px", justifyContent: "center", borderLeft: `1px solid ${T.borderBright}`, paddingLeft: "16px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", justifyContent: "center", borderLeft: `1px solid ${T.border}`, paddingLeft: "16px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: T.textDim }}>
-            <Droplets size={14} color={T.blue} /> Model: <strong style={{ color: T.textBright }}>{weather.clusterAdvice}</strong>
+            <Droplets size={14} color={T.blue} /> Model: <strong style={{ color: T.textBright }}>{finalClusterProfile}</strong>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: T.textDim }}>
-            <Thermometer size={14} color={T.amber} /> Temp: <strong style={{ color: T.textBright }}>{weather.temp}</strong>
+            <Thermometer size={14} color={T.amber} /> Temp: <strong style={{ color: T.textBright }}>{finalTemp}°C</strong>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: T.textDim }}>
+            <CloudRain size={14} color={T.blue} /> Rain: <strong style={{ color: T.textBright }}>{finalRain}mm</strong>
           </div>
         </div>
       </div>
